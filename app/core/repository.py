@@ -1,14 +1,8 @@
-﻿# app/core/repository.py
 """
 DB CRUD 단일 진입점.
 
-서비스 레이어가 SQL을 직접 쓰지 않도록 모든 DB 접근을 이 모듈로
-통과시킵니다. 함수 단위로 분리해 테스트와 재사용이 쉽도록 했습니다.
-
-함수 명명 규칙:
-    - article_*  : articles 테이블 관련
-    - recipient_*: recipients 테이블 관련
-    - sendlog_*  : send_log 테이블 관련
+STEP 4A-1: article_save에 track, tone_classification, tone_reason,
+tone_confidence 컬럼 반영. 기존 함수 시그니처 호환 유지.
 """
 
 import json
@@ -26,7 +20,6 @@ logger = logging.getLogger(__name__)
 #  Article
 # ════════════════════════════════════════════════════════════
 def article_exists(url: str) -> bool:
-    """URL이 이미 articles 테이블에 있으면 True. 중복 체크용."""
     if not url:
         return False
     with get_conn() as conn:
@@ -37,58 +30,59 @@ def article_exists(url: str) -> bool:
 
 
 def article_save(article: dict, summary: str, tone: Optional[dict],
-                 theme_label: str, press: str) -> Optional[int]:
+                 theme_label: str, press: str,
+                 track: str = "monitor") -> Optional[int]:
     """
-    기사 1건을 articles 테이블에 INSERT.
+    기사 1건 INSERT.
 
-    Args:
-        article: 파이프라인이 다룬 기사 dict
-        summary: 요약 결과
-        tone:    analyze_tone() 결과 dict 또는 None (TIER 2/3)
-        theme_label: 테마 라벨 (이모지 포함)
-        press: 매체명
-
-    Returns:
-        새로 생성된 row id. URL 중복 등으로 실패 시 None.
+    STEP 4A-1: track, tone_classification, tone_reason, tone_confidence,
+    image_url을 함께 저장.
     """
     url           = article.get("link") or article.get("originallink", "")
     original_url  = article.get("originallink", "")
     title         = article.get("title", "")
 
-    # title_clean: HTML 태그 제거한 검색용 제목
     import re
     title_clean = re.sub(r"<[^>]+>", "", title).strip()
 
-    description = article.get("description", "")
-    theme_id    = article.get("theme_id", "")
-    tier        = int(article.get("tier", 3))
-    matched_kw  = ", ".join(article.get("matched_keywords", []))
-    pub_date    = article.get("pub_date_iso", "")
+    description  = article.get("description", "")
+    theme_id     = article.get("theme_id", "")
+    tier         = int(article.get("tier", 1))
+    matched_kw   = ", ".join(article.get("matched_keywords", []))
+    pub_date     = article.get("pub_date_iso", "")
+    image_url    = article.get("image_url", "") or None
     collected_at = datetime.now(config.KST).isoformat()
 
     # 톤 정보 분해
     if tone and isinstance(tone, dict):
-        tone_level     = tone.get("level")
-        tone_hostile   = int(tone.get("hostile_count", 0))
-        tone_total     = int(tone.get("total_count", 0))
-        tone_sentences = json.dumps(
+        tone_classification = tone.get("classification") or None
+        tone_reason         = tone.get("reason") or None
+        tone_confidence     = tone.get("confidence") or None
+        tone_level          = tone.get("level") or None
+        tone_hostile        = int(tone.get("hostile_count", 0) or 0)
+        tone_total          = int(tone.get("total_count", 0) or 0)
+        tone_sentences      = json.dumps(
             tone.get("hostile_sentences", []),
             ensure_ascii=False,
         )
     else:
-        tone_level     = None
-        tone_hostile   = 0
-        tone_total     = 0
-        tone_sentences = None
+        tone_classification = None
+        tone_reason         = None
+        tone_confidence     = None
+        tone_level          = None
+        tone_hostile        = 0
+        tone_total          = 0
+        tone_sentences      = None
 
     sql = """
         INSERT INTO articles (
             url, original_url, title, title_clean, press,
             description, summary,
             theme_id, theme_label, tier, matched_kw,
+            track, tone_classification, tone_reason, tone_confidence,
             tone_level, tone_hostile, tone_total, tone_sentences,
-            pub_date, collected_at
-        ) VALUES (?,?,?,?,?, ?,?, ?,?,?,?, ?,?,?,?, ?,?)
+            image_url, pub_date, collected_at
+        ) VALUES (?,?,?,?,?, ?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?)
     """
     try:
         with get_conn() as conn:
@@ -96,21 +90,20 @@ def article_save(article: dict, summary: str, tone: Optional[dict],
                 url, original_url, title, title_clean, press,
                 description, summary,
                 theme_id, theme_label, tier, matched_kw,
+                track, tone_classification, tone_reason, tone_confidence,
                 tone_level, tone_hostile, tone_total, tone_sentences,
-                pub_date, collected_at,
+                image_url, pub_date, collected_at,
             ))
             return cur.lastrowid
     except Exception as e:
-        # URL UNIQUE 제약 위반은 정상적인 중복 → 경고로 끝
         if "UNIQUE" in str(e):
-            logger.debug(f"중복 URL (이미 저장됨): {url}")
+            logger.debug(f"중복 URL: {url}")
         else:
             logger.error(f"❌ 기사 저장 실패: {e}")
         return None
 
 
 def article_mark_sent(article_id: int, success: bool) -> None:
-    """텔레그램 발송 완료 시 articles.sent_at, sent_status 갱신."""
     sent_at = datetime.now(config.KST).isoformat()
     status  = 1 if success else 2
     with get_conn() as conn:
@@ -121,7 +114,6 @@ def article_mark_sent(article_id: int, success: bool) -> None:
 
 
 def article_recent(limit: int = 50, offset: int = 0) -> list[dict]:
-    """최근 기사 조회 (pub_date 또는 collected_at 역순)."""
     sql = """
         SELECT * FROM articles
         ORDER BY COALESCE(pub_date, collected_at) DESC
@@ -133,16 +125,76 @@ def article_recent(limit: int = 50, offset: int = 0) -> list[dict]:
 
 
 def article_count() -> int:
-    """전체 기사 수."""
     with get_conn() as conn:
         return conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
+
+
+def article_filter(
+    limit:           int = 50,
+    offset:          int = 0,
+    tier:            Optional[int]  = None,
+    theme:           Optional[str]  = None,
+    search:          Optional[str]  = None,
+    tone:            Optional[str]  = None,
+    track:           Optional[str]  = None,
+    classification:  Optional[str]  = None,
+) -> tuple[list[dict], int]:
+    """
+    필터/검색 조합 기사 조회. (rows, total) 반환.
+
+    STEP 4A-1:
+    - track ('monitor' | 'reference') 필터 추가
+    - classification ('비우호' | '일반' | '미분석') 필터 추가
+    """
+    where:  list[str] = []
+    params: list      = []
+
+    if tier is not None:
+        where.append("tier = ?"); params.append(tier)
+    if theme:
+        where.append("theme_id = ?"); params.append(theme)
+    if track:
+        where.append("track = ?"); params.append(track)
+    if classification:
+        where.append("tone_classification = ?"); params.append(classification)
+    if tone:  # 하위호환: tone_level
+        where.append("tone_level = ?"); params.append(tone)
+    if search:
+        like = f"%{search}%"
+        where.append("(title_clean LIKE ? OR summary LIKE ?)")
+        params.extend([like, like])
+
+    w = ("WHERE " + " AND ".join(where)) if where else ""
+    order = "ORDER BY COALESCE(pub_date, collected_at) DESC"
+
+    with get_conn() as conn:
+        total = conn.execute(f"SELECT COUNT(*) FROM articles {w}", params).fetchone()[0]
+        rows  = conn.execute(
+            f"SELECT * FROM articles {w} {order} LIMIT ? OFFSET ?",
+            params + [limit, offset],
+        ).fetchall()
+    return [dict(r) for r in rows], total
+
+
+def article_daily(date_str: str, limit: int = 20) -> list[dict]:
+    start = f"{date_str}T00:00:00"
+    end   = f"{date_str}T23:59:59"
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT * FROM articles
+               WHERE (pub_date >= ? AND pub_date <= ?)
+                  OR (pub_date IS NULL AND collected_at >= ? AND collected_at <= ?)
+               ORDER BY tier ASC, COALESCE(pub_date, collected_at) DESC
+               LIMIT ?""",
+            (start, end, start, end, limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 # ════════════════════════════════════════════════════════════
 #  Recipient
 # ════════════════════════════════════════════════════════════
 def recipient_list_active() -> list[dict]:
-    """발송 활성화된 수신자 전체."""
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM recipients WHERE enabled = 1 ORDER BY id"
@@ -151,7 +203,6 @@ def recipient_list_active() -> list[dict]:
 
 
 def recipient_list_all() -> list[dict]:
-    """관리자용: 비활성 포함 전체 수신자 목록."""
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM recipients ORDER BY id"
@@ -164,6 +215,7 @@ def recipient_update(rid: int, **kwargs) -> bool:
         "name", "role", "enabled",
         "receive_tier1_warn", "receive_tier1_watch", "receive_tier1_good",
         "receive_tier2", "receive_tier3", "receive_daily_report",
+        "receive_reference",
     }
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if not fields:
@@ -185,19 +237,6 @@ def recipient_delete(rid: int) -> bool:
 
 def recipient_add(chat_id: str, name: str, role: str = "",
                   permissions: Optional[dict] = None) -> Optional[int]:
-    """
-    수신자 추가.
-
-    permissions 예:
-        {
-            "receive_tier1_warn":  1,
-            "receive_tier1_watch": 1,
-            "receive_tier1_good":  1,
-            "receive_tier2":       1,
-            "receive_tier3":       0,
-            "receive_daily_report": 1,
-        }
-    """
     perms = permissions or {}
     created_at = datetime.now(config.KST).isoformat()
 
@@ -206,8 +245,9 @@ def recipient_add(chat_id: str, name: str, role: str = "",
             chat_id, name, role,
             receive_tier1_warn, receive_tier1_watch, receive_tier1_good,
             receive_tier2, receive_tier3, receive_daily_report,
+            receive_reference,
             enabled, created_at
-        ) VALUES (?,?,?, ?,?,?, ?,?,?, 1, ?)
+        ) VALUES (?,?,?, ?,?,?, ?,?,?, ?, 1, ?)
     """
     try:
         with get_conn() as conn:
@@ -219,6 +259,7 @@ def recipient_add(chat_id: str, name: str, role: str = "",
                 perms.get("receive_tier2",        1),
                 perms.get("receive_tier3",        0),
                 perms.get("receive_daily_report", 1),
+                perms.get("receive_reference",    0),
                 created_at,
             ))
             return cur.lastrowid
@@ -228,60 +269,6 @@ def recipient_add(chat_id: str, name: str, role: str = "",
         else:
             logger.error(f"❌ 수신자 추가 실패: {e}")
         return None
-
-
-# ════════════════════════════════════════════════════════════
-#  Article (filtered search)
-# ════════════════════════════════════════════════════════════
-def article_filter(
-    limit:  int = 50,
-    offset: int = 0,
-    tier:   Optional[int]  = None,
-    theme:  Optional[str]  = None,
-    search: Optional[str]  = None,
-    tone:   Optional[str]  = None,
-) -> tuple[list[dict], int]:
-    """필터/검색 조합 기사 조회. (rows, total) 반환."""
-    where:  list[str] = []
-    params: list      = []
-
-    if tier is not None:
-        where.append("tier = ?"); params.append(tier)
-    if theme:
-        where.append("theme_id = ?"); params.append(theme)
-    if search:
-        like = f"%{search}%"
-        where.append("(title_clean LIKE ? OR summary LIKE ?)")
-        params.extend([like, like])
-    if tone:
-        where.append("tone_level = ?"); params.append(tone)
-
-    w = ("WHERE " + " AND ".join(where)) if where else ""
-    order = "ORDER BY COALESCE(pub_date, collected_at) DESC"
-
-    with get_conn() as conn:
-        total = conn.execute(f"SELECT COUNT(*) FROM articles {w}", params).fetchone()[0]
-        rows  = conn.execute(
-            f"SELECT * FROM articles {w} {order} LIMIT ? OFFSET ?",
-            params + [limit, offset],
-        ).fetchall()
-    return [dict(r) for r in rows], total
-
-
-def article_daily(date_str: str, limit: int = 20) -> list[dict]:
-    """특정 날짜(YYYY-MM-DD KST)의 기사. tier 오름차순."""
-    start = f"{date_str}T00:00:00"
-    end   = f"{date_str}T23:59:59"
-    with get_conn() as conn:
-        rows = conn.execute(
-            """SELECT * FROM articles
-               WHERE (pub_date >= ? AND pub_date <= ?)
-                  OR (pub_date IS NULL AND collected_at >= ? AND collected_at <= ?)
-               ORDER BY tier ASC, COALESCE(pub_date, collected_at) DESC
-               LIMIT ?""",
-            (start, end, start, end, limit),
-        ).fetchall()
-    return [dict(r) for r in rows]
 
 
 # ════════════════════════════════════════════════════════════
@@ -353,7 +340,6 @@ def session_cleanup() -> None:
 # ════════════════════════════════════════════════════════════
 def sendlog_record(article_id: int, recipient_id: int,
                    success: bool, error_msg: str = "") -> None:
-    """발송 결과 1건을 send_log에 기록."""
     sent_at = datetime.now(config.KST).isoformat()
     with get_conn() as conn:
         conn.execute(

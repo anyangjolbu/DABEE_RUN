@@ -1,13 +1,5 @@
 # 개발 이력 (HISTORY)
 
-## 2026-05-03 — STEP 4A-1: 톤 분류 시스템 백엔드 재설계
-- **무엇을**: tone_analyzer 3분류(비우호/일반/미분석) 전면 개편, relevance에 메이저 언론사+단독 자동통과, settings_store에 monitor/reference 두 트랙, pipeline 트랙별 분기, repository에 track/tone_classification/tone_reason/tone_confidence/image_url 컬럼 반영, recipient_filter 분류 기반 매칭.
-- **왜**: breaknews 칼럼 같은 구조적 문제 제기 기사가 '양호'로 잘못 분류되는 문제 + Sentiment Index 정합성 부족 + TIER 시스템 복잡도 제거.
-- **어떻게**: PR팀 관점 프롬프트로 재작성(직접 부정 + 구조적 문제 제기 + 부정 맥락 모두 비우호), 미분석 폴백 분리(절대 일반으로 폴백 X), monitor 트랙만 톤분석·텔레그램·본문크롤링, reference 트랙은 웹 노출 + 옵션 텔레그램.
-- **검증**: python -m scripts.test_pipeline (dry_run) → monitor/reference 카운트 분리, classification 라벨 출력 확인.
-- **남은 일**: STEP 4A-2 (대시보드 카드/탭/Sentiment Index 백엔드 산출/텔레그램 메시지 포맷).
-
-
 > 역순 기록. 시스템의 **현재 구조**는 [ARCHITECTURE.md](ARCHITECTURE.md)를 보세요.
 
 ---
