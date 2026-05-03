@@ -253,10 +253,41 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 
 /* ─── Article Cards ──────────────────────────────────────── */
 .cards-section { padding: 36px 0 48px; }
-.cards-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px 18px; }
+.cards-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
 
-.card-article { background: transparent; cursor: pointer; display: block; }
+.card-article {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  cursor: pointer;
+  transition: transform .15s var(--ease), box-shadow .15s var(--ease);
+}
+.card-article:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 32px rgba(15,23,42,.09);
+}
 .card-article:hover .card-title-text { color: var(--blue); }
+.card-inner {
+  padding: 16px 16px 12px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.card-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  align-self: flex-start;
+  margin-bottom: 2px;
+}
 
 .thumb {
   position: relative;
@@ -302,18 +333,41 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 .tone-strip.watch { background: var(--tone-watch); }
 
 .card-title-text {
-  margin: 0 0 8px;
-  font-size: 17px; line-height: 1.45;
-  letter-spacing: -0.04em;
+  margin: 0;
+  font-size: 15px; line-height: 1.5;
+  letter-spacing: -0.03em;
   word-break: keep-all;
-  color: #111827;
+  color: var(--text);
+  font-weight: 700;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   transition: color .15s var(--ease);
 }
-.card-author { font-size: 13px; color: var(--muted); }
+.card-summary {
+  margin: 0;
+  font-size: 13px; line-height: 1.6;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card-foot {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+.card-press { font-weight: 700; color: var(--ink-2); }
+.card-time  { font-variant-numeric: tabular-nums; }
+.card-dot   { opacity: .4; }
 
 /* ─── New Alert Banner ───────────────────────────────────── */
 .new-alert {
@@ -683,7 +737,7 @@ table.rcp { width: 100%; border-collapse: collapse; }
 /* ─── Responsive ─────────────────────────────────────────── */
 @media (max-width: 1180px) {
   .hero { grid-template-columns: 1fr; }
-  .cards-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kpi { grid-template-columns: repeat(2, 1fr); }
   .adgrid { grid-template-columns: 1fr; }
 }

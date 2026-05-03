@@ -6,45 +6,6 @@
   let currentTab = 'all';
   let allArticles = [];
 
-  // 신문사 브랜드 (약칭 + 배경색)
-  const PRESS_BRAND = {
-    '조선일보':    { s: '조선', bg: '#003087' },
-    '중앙일보':    { s: '중앙', bg: '#CC0000' },
-    '동아일보':    { s: '동아', bg: '#004EA2' },
-    '매일경제':    { s: '매경', bg: '#005BAC' },
-    '한국경제':    { s: '한경', bg: '#C8102E' },
-    '연합뉴스':    { s: '연합', bg: '#1E40AF' },
-    '뉴시스':      { s: 'NS',   bg: '#2D3A8C' },
-    '뉴스1':       { s: 'N1',   bg: '#DC2626' },
-    '서울경제':    { s: '서경', bg: '#0060AF' },
-    '파이낸셜뉴스':{ s: '파낸', bg: '#1E3A8A' },
-    '헤럴드경제':  { s: '헤경', bg: '#374151' },
-    '한겨레':      { s: '겨레', bg: '#166534' },
-    '경향신문':    { s: '경향', bg: '#4B5563' },
-    '전자신문':    { s: '전자', bg: '#0369A1' },
-    'IT조선':      { s: 'ITC',  bg: '#003087' },
-    '디지털데일리':{ s: 'DD',   bg: '#1565C0' },
-    '아시아경제':  { s: '아경', bg: '#B45309' },
-    '이데일리':    { s: 'EDL',  bg: '#0F5488' },
-    '머니투데이':  { s: 'MT',   bg: '#166534' },
-    'ZDNet Korea': { s: 'ZD',   bg: '#1565C0' },
-    '더벨':        { s: '더벨', bg: '#1E293B' },
-    '비즈니스포스트':{ s: 'BP', bg: '#7C3AED' },
-    '글로벌이코노믹':{ s: 'GE', bg: '#065F46' },
-    '세계일보':    { s: '세계', bg: '#1D4ED8' },
-    '국민일보':    { s: '국민', bg: '#0C4A6E' },
-    '문화일보':    { s: '문화', bg: '#5B21B6' },
-  };
-  const LOGO_PALETTE = ['#1E40AF','#065F46','#7C2D12','#5B21B6','#164E63','#713F12','#1E3A5F','#374151'];
-
-  function pressLogo(press) {
-    const b = PRESS_BRAND[press];
-    if (b) return b;
-    let hash = 0;
-    for (let i = 0; i < press.length; i++) hash = (hash * 31 + press.charCodeAt(i)) & 0xffff;
-    return { s: press.slice(0, 2), bg: LOGO_PALETTE[hash % LOGO_PALETTE.length] };
-  }
-
   // ── Helpers ──────────────────────────────────────────────
   function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, c =>
@@ -75,12 +36,13 @@
 
   // ── Card builder ─────────────────────────────────────────
   function buildCard(a) {
-    const meta  = classMeta(a);
-    const link  = a.original_url || a.url || '#';
-    const title = a.title_clean || a.title || '';
-    const press = a.press || a.theme_label || '';
-    const t     = timeStr(a.pub_date);
-    const reason = a.tone_reason || '';
+    const meta    = classMeta(a);
+    const link    = a.original_url || a.url || '#';
+    const title   = a.title_clean || a.title || '';
+    const press   = a.press || a.theme_label || '';
+    const t       = timeStr(a.pub_date || a.collected_at);
+    const reason  = a.tone_reason || '';
+    const summary = a.summary || a.description || '';
 
     const art = document.createElement('a');
     art.className = `card-article card-${meta.tag}`;
@@ -88,31 +50,30 @@
     art.target = '_blank';
     art.rel = 'noopener';
 
-    // 비우호일 때 reason을 title attribute(툴팁)와 카드 하단에 함께 표시
-    const reasonBlock = (meta.tag === 'hostile' && reason)
+    const badgeHtml = meta.label
+      ? `<span class="card-badge badge-${meta.tag}">${meta.label}</span>`
+      : '';
+    const summaryHtml = summary
+      ? `<p class="card-summary">${esc(summary)}</p>`
+      : '';
+    const reasonHtml = (meta.tag === 'hostile' && reason)
       ? `<div class="card-reason">📌 ${esc(reason)}</div>`
       : '';
-
     const titleAttr = reason ? `title="${esc(reason)}"` : '';
 
-    const logo = pressLogo(press || '?');
-    const imgHtml = a.image_url
-      ? `<img class="thumb-img" src="${esc(a.image_url)}" alt="" loading="lazy" onerror="this.remove();">`
-      : '';
+    const footParts = [];
+    if (press) footParts.push(`<span class="card-press">${esc(press)}</span>`);
+    if (t)     footParts.push(`<span class="card-time">${t}</span>`);
 
     art.innerHTML = `
-      <div class="thumb">
-        <div class="thumb-logo-bg" style="background:${logo.bg}">
-          <span class="thumb-logo-text">${esc(logo.s)}</span>
-        </div>
-        ${imgHtml}
-        ${press ? `<span class="thumb-press">${esc(press)}</span>` : ''}
-        ${meta.label ? `<span class="thumb-badge badge-${meta.tag}">${meta.label}</span>` : ''}
-        ${t ? `<div class="thumb-time">${t}</div>` : ''}
-        ${meta.strip ? `<div class="tone-strip ${meta.strip}"></div>` : ''}
+      <div class="card-inner">
+        ${badgeHtml}
+        <h4 class="card-title-text" ${titleAttr}>${esc(title)}</h4>
+        ${summaryHtml}
+        ${reasonHtml}
+        <div class="card-foot">${footParts.join('<span class="card-dot">·</span>')}</div>
       </div>
-      <h4 class="card-title-text" ${titleAttr}>${esc(title)}</h4>
-      ${reasonBlock}
+      ${meta.strip ? `<div class="tone-strip ${meta.strip}"></div>` : ''}
     `;
     return art;
   }

@@ -10,6 +10,7 @@
 import html
 import logging
 import time
+from email.utils import parsedate_to_datetime
 
 import requests
 
@@ -91,6 +92,11 @@ def _fetch_keyword(keyword: str, headers: dict, display: int,
                     for key in ("title", "description"):
                         if key in item:
                             item[key] = html.unescape(item[key])
+                    if "pubDate" in item:
+                        try:
+                            item["pub_date_iso"] = parsedate_to_datetime(item["pubDate"]).isoformat()
+                        except Exception:
+                            pass
                 logger.info(f"  ✓ {len(items)}건 수신")
                 return items
 
