@@ -1,14 +1,13 @@
-﻿# app/services/telegram_sender.py
+# app/services/telegram_sender.py
 """
-텔레그램 메시지 전송.
+텔레그램 메시지 전송 (STEP 4A-2).
 
 PR팀이 모바일에서 한눈에 볼 수 있도록 다음 정보를 압축해 표시:
-    - 매체명 + 제목
+    - [트랙 배지] 매체명 + 제목
     - 원문 링크
-    - 테마 + 티어
-    - 매칭 키워드 (해시태그)
-    - 발행일시 (KST)
-    - 비우호 톤 (TIER 1만, 경고/주의 시 인용 문장 포함)
+    - 테마, 매칭 키워드, 발행일시(KST)
+    - monitor 트랙: 톤 분류 (비우호/일반/미분석) + 비우호문장 인용
+    - reference 트랙: '참고' 배지만, 톤 분석 없음
     - GPT 요약
 
 HTML/Markdown 모드 대신 plain text를 씁니다. 텔레그램의 자동 링크
@@ -30,25 +29,27 @@ TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
 
 
 # ── 헬퍼 ─────────────────────────────────────────────────────────────
-def _tier_label(tier: int) -> str:
-    return {1: "🔴 TIER 1", 2: "🟠 TIER 2", 3: "🟡 TIER 3"}.get(
-        tier, f"TIER {tier}"
-    )
+def _track_badge(track: str, classification: str = "") -> str:
+    """트랙 + 분류 → 배지 문자열."""
+    if track == "reference":
+        return "⚪ 참고"
+    if classification == "비우호":
+        return "🔴 비우호"
+    if classification == "일반":
+        return "🟢 일반"
+    if classification == "미분석":
+        return "⚫ 미분석"
+    return "🔴 모니터"
 
 
 def _format_pub_date(article: dict) -> str:
-    """
-    article의 pubDate(RFC2822 또는 ISO)를 'YYYY-MM-DD HH:MM (KST)'로.
-    """
     raw = article.get("pubDate", "") or article.get("pub_date_iso", "")
     if not raw:
         return "알 수 없음"
     try:
-        if "T" in raw or len(raw) >= 19 and "-" in raw:
-            # 이미 ISO
+        if "T" in raw or (len(raw) >= 19 and "-" in raw):
             dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
         else:
-            # RFC2822 (네이버 API 원본)
             dt = parsedate_to_datetime(raw)
         return dt.astimezone(config.KST).strftime("%Y-%m-%d %H:%M") + " (KST)"
     except Exception:
@@ -56,7 +57,6 @@ def _format_pub_date(article: dict) -> str:
 
 
 def _format_keywords(matched_keywords) -> str:
-    """매칭 키워드를 #해시태그 문자열로."""
     if isinstance(matched_keywords, list):
         items = matched_keywords
     elif isinstance(matched_keywords, str):
@@ -67,53 +67,65 @@ def _format_keywords(matched_keywords) -> str:
 
 
 def build_message(article: dict, summary: str, tone: dict,
-                  theme_label: str, press: str) -> str:
+                  theme_label: str, press: str,
+                  track: str = "monitor") -> str:
     """
-    텔레그램에 보낼 메시지 본문 작성.
+    텔레그램 메시지 본문 작성 (track 인자 추가).
+
+    Args:
+        article: 기사 dict
+        summary: GPT 요약
+        tone:    톤 분류 결과 (monitor만, reference는 빈 dict)
+        theme_label: 테마 라벨 (예: '🔴 SK하이닉스')
+        press: 매체명
+        track: 'monitor' | 'reference'
     """
-    tier   = int(article.get("tier", 3))
     title  = article.get("title_clean") or article.get("title", "제목 없음")
     link   = article.get("originallink") or article.get("link", "")
 
-    # 매체명 prefix
-    title_line = f"<{press}> {title}" if press else title
+    # 분류 추출 (monitor만)
+    classification = (tone or {}).get("classification", "")
+    badge = _track_badge(track, classification)
 
-    # 테마 + 티어 한 줄
-    tier_str  = _tier_label(tier)
-    parts = []
-    if theme_label:
-        parts.append(f"테마: {theme_label}")
-    if tier_str:
-        parts.append(tier_str)
-    theme_tier_line = " | ".join(parts)
+    # 첫 줄: [배지] <매체> 제목
+    title_line = f"[{badge}] <{press}> {title}" if press else f"[{badge}] {title}"
+
+    # 테마 라인
+    theme_line = f"테마: {theme_label}" if theme_label else ""
 
     # 키워드, 발행일
-    kw_line   = _format_keywords(article.get("matched_keywords", []))
-    pub_line  = f"발행: {_format_pub_date(article)}"
+    kw_line  = _format_keywords(article.get("matched_keywords", []))
+    pub_line = f"발행: {_format_pub_date(article)}"
 
     SEP = "─" * 18
 
-    lines = [
-        title_line,
-        link,
-        SEP,
-        theme_tier_line,
-    ]
+    lines = [title_line, link, SEP]
+    if theme_line:
+        lines.append(theme_line)
     if kw_line:
         lines.append(f"키워드: {kw_line}")
     lines.append(pub_line)
 
-    # ── 비우호 톤 (TIER 1만) ─────────────────────────────────
-    if tier == 1 and tone and tone.get("level"):
-        level = tone["level"]
+    # ── 톤 분류 (monitor만) ─────────────────────────────────
+    if track == "monitor" and tone and classification:
         h     = tone.get("hostile_count", 0)
         total = tone.get("total_count", 0)
-        lines.append(f"보도톤: [{level}] 비우호 {h}/{total}문장")
+        conf  = tone.get("confidence", "")
+        reason = tone.get("reason", "") or ""
 
-        # 경고는 최대 3문장, 주의는 1문장 인용
-        if level in ("경고", "주의"):
-            limit = 3 if level == "경고" else 1
-            for s in tone.get("hostile_sentences", [])[:limit]:
+        cls_line = f"분류: [{classification}]"
+        if conf:
+            cls_line += f" (신뢰도 {conf})"
+        if total:
+            cls_line += f" — 비우호 {h}/{total}문장"
+        lines.append(cls_line)
+
+        # 비우호 분류면 근거 + 인용문장
+        if classification == "비우호":
+            if reason:
+                short_reason = reason[:80] + ("..." if len(reason) > 80 else "")
+                lines.append(f"근거: {short_reason}")
+            for s in tone.get("hostile_sentences", [])[:3]:
                 short = s[:60] + ("..." if len(s) > 60 else "")
                 lines.append(f"  ㄴ {short}")
 
@@ -129,9 +141,7 @@ def build_message(article: dict, summary: str, tone: dict,
 def send_to_chat(chat_id: str, message: str,
                  disable_preview: bool = False,
                  retry: int = 3, delay: int = 2) -> tuple[bool, str]:
-    """
-    단일 chat_id에게 메시지 전송. (success, error_msg) 반환.
-    """
+    """단일 chat_id에게 메시지 전송. (success, error_msg) 반환."""
     if not config.TELEGRAM_BOT_TOKEN:
         return False, "TELEGRAM_BOT_TOKEN 미설정"
 

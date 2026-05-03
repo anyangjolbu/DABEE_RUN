@@ -1,40 +1,15 @@
-# scripts/check_db.py
-"""
-DB 상태 확인용 스크립트.
-
-사용법:
-    python -m scripts.check_db
-"""
-
-import sqlite3
-from app import config
-
-
-def main():
-    print(f"DB 경로: {config.DB_PATH}")
-    print(f"파일 존재: {config.DB_PATH.exists()}")
-    print()
-
-    conn = sqlite3.connect(config.DB_PATH)
-    conn.row_factory = sqlite3.Row
-
-    # 테이블 목록
-    tables = [
-        r[0] for r in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-        ).fetchall()
-    ]
-    print(f"테이블 ({len(tables)}개):")
-    for t in tables:
-        count = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
-        print(f"  - {t:20s} ({count}건)")
-
-    # WAL 모드 확인
-    mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
-    print(f"\njournal_mode: {mode}")
-
-    conn.close()
-
-
-if __name__ == "__main__":
-    main()
+﻿import sqlite3
+conn = sqlite3.connect("data/articles.db")
+conn.row_factory = sqlite3.Row
+rows = conn.execute("""
+    SELECT id, track, tone_classification, tone_confidence,
+           substr(title_clean,1,40) as t, press, sent_status
+    FROM articles ORDER BY id DESC LIMIT 10
+""").fetchall()
+print(f"{'ID':<5}{'track':<10}{'class':<10}{'conf':<8}{'sent':<6}{'press':<15}title")
+print("-"*100)
+for r in rows:
+    print(f"{r['id']:<5}{r['track'] or '-':<10}{r['tone_classification'] or '-':<10}{r['tone_confidence'] or '-':<8}{r['sent_status']!s:<6}{(r['press'] or '-')[:13]:<15}{r['t']}")
+total = conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
+print(f"\n총 기사 수: {total}")
+conn.close()
