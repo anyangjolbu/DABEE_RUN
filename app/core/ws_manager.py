@@ -1,4 +1,4 @@
-﻿# app/core/ws_manager.py
+# app/core/ws_manager.py
 """
 WebSocket 연결 관리 + 실시간 로그 브로드캐스트.
 
@@ -69,8 +69,21 @@ class WSLogHandler(logging.Handler):
     조용히 무시합니다 (예: 모듈 초기화 시점).
     """
 
+    # WS로 보내지 않을 로거 (피드백 루프 + 노이즈 방지)
+    WS_LOG_BLACKLIST = (
+        "websockets",
+        "uvicorn.access",
+        "uvicorn.error",
+        "watchfiles",
+        "app.core.ws_manager",  # 자기 자신
+    )
+
     def emit(self, record: logging.LogRecord) -> None:
         try:
+            # 블랙리스트 로거는 WS로 안 보냄
+            for blocked in self.WS_LOG_BLACKLIST:
+                if record.name.startswith(blocked):
+                    return
             msg = self.format(record)
             payload = {
                 "type":    "log",
