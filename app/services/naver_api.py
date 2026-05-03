@@ -113,6 +113,33 @@ def _fetch_keyword(keyword: str, headers: dict, display: int,
     return []
 
 
+def _filter_by_lookback(articles: list, lookback_days: int) -> list:
+    """pubDate 기준 lookback_days 이내 기사만 통과. 0 이하면 무필터."""
+    if lookback_days <= 0:
+        return articles
+    from datetime import datetime, timedelta, timezone
+    cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+    out, dropped = [], 0
+    for a in articles:
+        iso = a.get("pub_date_iso")
+        if not iso:
+            out.append(a)  # pubDate 없으면 통과 (보수적)
+            continue
+        try:
+            dt = datetime.fromisoformat(iso)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            if dt >= cutoff:
+                out.append(a)
+            else:
+                dropped += 1
+        except Exception:
+            out.append(a)
+    if dropped:
+        logger.info(f"🗓️ lookback {lookback_days}일 필터: {dropped}건 제외, {len(out)}건 통과")
+    return out
+
+
 def fetch_all_themes(settings: dict) -> list[dict]:
     """
     settings.search_themes에 등록된 모든 테마를 순회하며 수집.
@@ -136,4 +163,5 @@ def fetch_all_themes(settings: dict) -> list[dict]:
                 all_articles.append(a)
 
     logger.info(f"✅ 전체 수집 완료: {len(all_articles)}건 (테마 간 중복 제거 후)")
+    all_articles = _filter_by_lookback(all_articles, int(settings.get("collection_lookback_days", 0) or 0))
     return all_articles
