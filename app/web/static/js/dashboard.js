@@ -67,12 +67,12 @@
     art.innerHTML = `
       <div class="${thumbClass}">
         ${thumbInner}
+        ${press ? `<span class="thumb-press">${esc(press)}</span>` : ''}
         ${meta.label ? `<span class="thumb-badge badge-${meta.tag}">${meta.label}</span>` : ''}
         ${t ? `<div class="thumb-time">${t}</div>` : ''}
         ${meta.strip ? `<div class="tone-strip ${meta.strip}"></div>` : ''}
       </div>
       <h4 class="card-title-text" ${titleAttr}>${esc(title)}</h4>
-      <div class="card-author">${esc(press)}</div>
       ${reasonBlock}
     `;
     return art;
@@ -177,11 +177,11 @@
     // Hero title
     const titleEl = document.getElementById('heroTitle');
     if (hostile === 0) {
-      titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">특이 시그널 없음</span>';
+      titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">긍정 흐름이 우세합니다</span>';
     } else if (hostile <= 1) {
-      titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">관망 국면</span>입니다';
+      titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">전반적으로 관망 국면입니다</span>';
     } else {
-      titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">비우호 흐름</span>이 감지됩니다';
+      titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">비우호 흐름이 감지됩니다</span>';
     }
 
     // Desc
