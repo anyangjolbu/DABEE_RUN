@@ -39,7 +39,7 @@ TONE_RESPONSE_SCHEMA = {
     "properties": {
         "classification": {
             "type": "string",
-            "enum": ["비우호", "일반", "관련없음"],
+            "enum": ["비우호", "양호", "관련없음"],
         },
         "reason": {
             "type": "string",
@@ -83,7 +83,7 @@ def _build_legacy_fields(classification: str, hostile: list, total: int) -> dict
     if classification == "비우호":
         return {"level": "경고", "tone": "비우호적",
                 "hostile_count": len(hostile), "total_count": total}
-    if classification == "일반":
+    if classification == "양호":
         return {"level": "양호", "tone": "중립적",
                 "hostile_count": 0, "total_count": total}
     return {"level": "-", "tone": "-", "hostile_count": 0, "total_count": 0}
@@ -123,7 +123,7 @@ def analyze_tone(article: dict, theme_label: str, settings: dict) -> dict:
    곽노정·최태원의 경영·리더십에 대한 부정적 평가
 3. 부정 맥락 연관 — 업계 위기 기사에서 주요 사례로 언급, 경쟁사 대비 불리한 비교
 
-▶ "일반" — 단순 사실 보도, 평이한 동향, 실적 발표(중립적), 신제품·기술 발표,
+▶ "양호" — 단순 사실 보도, 평이한 동향, 실적 발표(중립적), 신제품·기술 발표,
   경쟁사 중심 기사에서 단순 비교 대상으로 짧게 언급, 통상적 경영 활동
 
 ▶ "관련없음" — 모니터링 대상이 등장하지 않거나 단순 키워드 우연 매칭
@@ -166,7 +166,7 @@ def analyze_tone(article: dict, theme_label: str, settings: dict) -> dict:
         hostile = [s for s in hostile if isinstance(s, str) and s.strip()]
         hostile = hostile[:HOSTILE_LIMIT]
 
-        if classification not in ("비우호", "일반", "관련없음"):
+        if classification not in ("비우호", "양호", "관련없음"):
             logger.warning(f"  ⚠️ 알 수 없는 분류 '{classification}' → 미분석")
             return _empty_result(f"알 수 없는 분류: {classification}")
 

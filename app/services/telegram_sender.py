@@ -6,7 +6,7 @@ PR팀이 모바일에서 한눈에 볼 수 있도록 다음 정보를 압축해 
     - [트랙 배지] 매체명 + 제목
     - 원문 링크
     - 테마, 매칭 키워드, 발행일시(KST)
-    - monitor 트랙: 톤 분류 (비우호/일반/미분석) + 비우호문장 인용
+    - monitor 트랙: 톤 분류 (비우호/양호/미분석) + 비우호문장 인용
     - reference 트랙: '참고' 배지만, 톤 분석 없음
     - GPT 요약
 
@@ -35,8 +35,8 @@ def _track_badge(track: str, classification: str = "") -> str:
         return "⚪ 참고"
     if classification == "비우호":
         return "🔴 비우호"
-    if classification == "일반":
-        return "🟢 일반"
+    if classification == "양호":
+        return "🟢 양호"
     if classification == "미분석":
         return "⚫ 미분석"
     return "🔴 모니터"

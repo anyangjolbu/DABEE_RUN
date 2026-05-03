@@ -1,7 +1,7 @@
 // Public dashboard: hero sentiment, trend chart, article cards, section tabs.
 // STEP 4A-2 (옵션 A): tone_classification 기반 배지/필터 + reason 노출
 (function () {
-  const LIMIT = 12;
+  const LIMIT = 50;
   let offset = 0, total = 0, pending = false;
   let currentTab = 'all';
   let allArticles = [];
@@ -21,7 +21,7 @@
       return { tag: 'reference', label: '참고', strip: 'reference' };
     }
     if (cls === '비우호') return { tag: 'hostile', label: '비우호', strip: 'hostile' };
-    if (cls === '일반')   return { tag: 'normal',  label: '일반',  strip: 'normal'  };
+    if (cls === '양호')   return { tag: 'normal',  label: '양호',  strip: 'normal'  };
     if (cls === '미분석') return { tag: 'unknown', label: '미분석', strip: 'unknown' };
     return { tag: '', label: '', strip: '' };
   }
@@ -94,7 +94,7 @@
 
   function filterByTab(items) {
     if (currentTab === 'hostile')   return items.filter(a => a.tone_classification === '비우호' && (a.track || 'monitor') === 'monitor');
-    if (currentTab === 'normal')    return items.filter(a => a.tone_classification === '일반'  && (a.track || 'monitor') === 'monitor');
+    if (currentTab === 'normal')    return items.filter(a => a.tone_classification === '양호'  && (a.track || 'monitor') === 'monitor');
     if (currentTab === 'reference') return items.filter(a => (a.track || 'monitor') === 'reference');
     return items;
   }
