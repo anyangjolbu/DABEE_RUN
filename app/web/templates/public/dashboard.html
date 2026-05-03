@@ -29,11 +29,11 @@
           <b class="tnum" id="heroScore">—</b>
         </div>
         <div class="mini-stat">
-          <span>우호 기사 비중</span>
+          <span>양호 기사 비중</span>
           <b id="heroGood">—</b>
         </div>
         <div class="mini-stat">
-          <span>비우호 기사 비중</span>
+          <span>비양호 기사 비중</span>
           <b id="heroWarn">—</b>
         </div>
       </div>
@@ -51,24 +51,24 @@
             <b class="tnum" id="trendScore">—</b>
           </div>
         </div>
-        <svg class="chart" id="trendChart" viewBox="0 0 520 160" preserveAspectRatio="none" aria-hidden="true">
-          <line x1="0" y1="20"  x2="520" y2="20"  stroke="#E5E7EB"/>
-          <line x1="0" y1="60"  x2="520" y2="60"  stroke="#E5E7EB"/>
-          <line x1="0" y1="100" x2="520" y2="100" stroke="#E5E7EB"/>
-          <line x1="0" y1="140" x2="520" y2="140" stroke="#E5E7EB"/>
-          <path id="trend-area" fill="url(#paint0_linear)" opacity="0.18"/>
-          <path id="trend-line" stroke="url(#paint1_linear)" stroke-width="4" stroke-linecap="round" fill="none"/>
+        <svg class="chart" id="trendChart" viewBox="0 0 520 200" preserveAspectRatio="none" aria-hidden="true">
+          <!-- y축 가이드: -100 / 0(중앙) / +100 -->
+          <line x1="0" y1="40"  x2="520" y2="40"  stroke="#F3F4F6"/>
+          <line x1="0" y1="90"  x2="520" y2="90"  stroke="#9CA3AF" stroke-dasharray="3,3"/>
+          <line x1="0" y1="140" x2="520" y2="140" stroke="#F3F4F6"/>
+          <text x="6" y="44"  font-size="9" fill="#9CA3AF">+100</text>
+          <text x="6" y="94"  font-size="9" fill="#6B7280">0</text>
+          <text x="6" y="144" font-size="9" fill="#9CA3AF">-100</text>
+          <!-- 일별 막대 (양호 위쪽, 비우호 아래쪽) -->
+          <g id="trend-bars"></g>
+          <!-- NSS 선 -->
+          <path id="trend-line" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
           <g id="trend-points"></g>
           <g id="trend-labels"></g>
-          <defs>
-            <linearGradient id="paint0_linear" x1="20" y1="48" x2="500" y2="140" gradientUnits="userSpaceOnUse">
-              <stop stop-color="#2563EB"/><stop offset="1" stop-color="#38BDF8"/>
-            </linearGradient>
-            <linearGradient id="paint1_linear" x1="20" y1="48" x2="500" y2="112" gradientUnits="userSpaceOnUse">
-              <stop stop-color="#2563EB"/><stop offset="1" stop-color="#38BDF8"/>
-            </linearGradient>
-          </defs>
+          <!-- 호버 영역 -->
+          <g id="trend-hover"></g>
         </svg>
+        <div class="trend-tooltip" id="trendTooltip" style="display:none;"></div>
         <div class="trend-legend">
           <span class="legend"><i class="dot" style="background:#2563eb"></i> Sentiment Index</span>
           <span class="legend"><i class="dot" style="background:#10b981"></i> 우호 증가</span>
@@ -126,5 +126,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/dashboard.js"></script>
+<script src="/static/js/dashboard.js?v=4c"></script>
 {% endblock %}

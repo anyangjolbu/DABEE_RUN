@@ -16,7 +16,7 @@ from typing import Optional
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from app.core import repository
+from app.core import repository, sentiment
 from app.core.db import get_conn
 from app.core.scheduler import scheduler
 from app.services.settings_store import load_settings
@@ -98,3 +98,20 @@ async def get_report(date: str):
     if not report:
         return JSONResponse({"error": "리포트 없음"}, status_code=404)
     return report
+
+
+@router.get("/dashboard/sentiment")
+async def dashboard_sentiment(days: int = Query(7, ge=1, le=30)):
+    """
+    오늘 NSS + N일치 추이.
+
+    응답 예:
+        {
+          "today":  {"date":"2026-05-03","score":33,"n":12,"good":8,"bad":4,...},
+          "trend":  [{"date":"2026-04-27","score":50,"n":10,...}, ...]
+        }
+    """
+    return JSONResponse({
+        "today": sentiment.sentiment_today(),
+        "trend": sentiment.sentiment_trend(days=days),
+    })

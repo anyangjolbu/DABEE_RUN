@@ -355,19 +355,19 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
   overflow: hidden;
 }
 .card-foot {
-  margin-top: auto;
+  margin-top: 12px;
   padding-top: 10px;
   border-top: 1px solid var(--line);
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
   flex-wrap: wrap;
 }
 .card-press { font-weight: 700; color: var(--ink-2); }
-.card-time  { font-variant-numeric: tabular-nums; }
-.card-dot   { opacity: .4; }
+.card-time  { font-variant-numeric: tabular-nums; font-size: 12px; }
+.card-dot   { opacity: .35; font-size: 11px; }
 
 /* ─── New Alert Banner ───────────────────────────────────── */
 .new-alert {
@@ -889,3 +889,54 @@ table.rcp { width: 100%; border-collapse: collapse; }
   text-overflow: ellipsis;
   backdrop-filter: blur(4px);
 }
+/* ═════════════════════════════════════════════════════════
+   STEP-4C: NSS chart tooltip & low-confidence
+   ═════════════════════════════════════════════════════════ */
+
+/* 차트 툴팁 */
+.trend-tooltip {
+  position: absolute;
+  z-index: 100;
+  min-width: 140px;
+  padding: 10px 12px;
+  background: #111827;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  transform: translate(-50%, -110%);
+  pointer-events: none;
+}
+.trend-tooltip .tt-date {
+  font-size: 11px;
+  color: #9CA3AF;
+  margin-bottom: 2px;
+}
+.trend-tooltip .tt-score {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.trend-tooltip .tt-score.pos { color: #10B981; }
+.trend-tooltip .tt-score.neu { color: #FCD34D; }
+.trend-tooltip .tt-score.neg { color: #F87171; }
+.trend-tooltip .tt-score.na  { color: #9CA3AF; font-size: 16px; }
+.trend-tooltip .tt-n {
+  font-size: 11px;
+  color: #D1D5DB;
+}
+.trend-tooltip .tt-detail {
+  font-size: 11px;
+  color: #9CA3AF;
+  margin-top: 2px;
+}
+
+/* hero 점수 저신뢰 회색 처리 */
+#heroScore.low-confidence,
+#trendScore.low-confidence {
+  color: #9CA3AF;
+}
+
+/* trend 패널이 position: relative 가져야 툴팁 좌표 잘 잡힘 */
+.trend-panel { position: relative; }
