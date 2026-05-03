@@ -211,32 +211,32 @@ function renderHero(today) {
   document.getElementById('heroGood').textContent = `${goodPct}%`;
   document.getElementById('heroWarn').textContent = `${badPct}%`;
 
-  // Pill — 색상 구간 +20 / 0~+20 / 0 미만
+  // Pill — +20 / -20~+20 / -20 미만 (3단계)
   const pill = document.getElementById('heroPill');
   if (score === null || !reliable) {
     pill.textContent = `오늘의 톤: 표본 부족 (N=${n})`;
     pill.className = 'pill neutral';
   } else if (score >= 20) {
-    pill.textContent = '오늘의 톤: 우호적';
+    pill.textContent = '오늘의 톤: 긍정 우세';
     pill.className = 'pill positive';
-  } else if (score >= 0) {
-    pill.textContent = '오늘의 톤: 관망';
+  } else if (score > -20) {
+    pill.textContent = '오늘의 톤: 혼조';
     pill.className = 'pill neutral';
   } else {
-    pill.textContent = '오늘의 톤: 비우호 감지';
+    pill.textContent = '오늘의 톤: 부정 우세';
     pill.className = 'pill negative';
   }
 
-  // Hero title
+  // Hero title (STEP-3B-8: 긍정/혼조/부정 3단계)
   const titleEl = document.getElementById('heroTitle');
   if (score === null) {
     titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">아직 분석 가능한 기사가 부족합니다</span>';
   } else if (score >= 20) {
-    titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">우호 흐름이 우세합니다</span>';
-  } else if (score >= 0) {
-    titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">관망 국면입니다</span>';
+    titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">긍정 흐름이 우세합니다</span>';
+  } else if (score > -20) {
+    titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">긍정·부정 혼조 양상입니다</span>';
   } else {
-    titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">비우호 흐름이 감지됩니다</span>';
+    titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">부정 흐름이 우세합니다</span>';
   }
 
   // Desc
