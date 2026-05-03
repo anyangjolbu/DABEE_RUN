@@ -1,0 +1,29 @@
+# 환경변수 (절대 커밋 금지)
+.env
+
+# 데이터·로그 (Railway Volume에 별도 저장)
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.json
+data/*.csv
+data/exports/
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
