@@ -1,0 +1,102 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}대시보드{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">관리자 대시보드</h1>
+  <div class="status-pill" id="statusPill">
+    <span class="dot"></span>
+    <span class="label">연결 중...</span>
+  </div>
+</div>
+
+<div class="card-grid-3">
+  <div class="card">
+    <div class="card-title">총 수집 기사</div>
+    <div class="metric-value" id="statArticles">-</div>
+  </div>
+  <div class="card">
+    <div class="card-title">등록 수신자</div>
+    <div class="metric-value" id="statRecipients">-</div>
+  </div>
+  <div class="card">
+    <div class="card-title">스케줄러</div>
+    <div class="metric-value" id="schedPhase">-</div>
+    <div class="last-result" id="schedNext">다음 실행: —</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">파이프라인 제어</div>
+  <div class="button-row" style="margin-bottom: var(--space-3);">
+    <button class="btn btn-primary" id="btnTrigger">지금 실행</button>
+    <button class="btn btn-secondary" id="btnStart">스케줄러 시작</button>
+    <button class="btn btn-secondary" id="btnStop">스케줄러 정지</button>
+  </div>
+  <div class="last-result" id="ctrlResult"></div>
+</div>
+
+<div class="card">
+  <div class="card-title">실시간 로그</div>
+  <div class="log-box" id="logBox"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/common.js"></script>
+<script>
+(function () {
+  const phaseEl  = document.getElementById('schedPhase');
+  const nextEl   = document.getElementById('schedNext');
+  const logBox   = document.getElementById('logBox');
+  const ctrlEl   = document.getElementById('ctrlResult');
+
+  const phaseLabel = (p) => ({ idle: '대기', running: '실행 중', stopped: '정지' }[p] || p);
+
+  function renderScheduler(s) {
+    if (!s) return;
+    phaseEl.textContent = phaseLabel(s.phase);
+    if (s.next_in_sec != null) {
+      const m = Math.floor(s.next_in_sec / 60);
+      const sec = s.next_in_sec % 60;
+      nextEl.textContent = `다음 실행: ${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+    } else {
+      nextEl.textContent = '다음 실행: —';
+    }
+  }
+
+  window.addEventListener('dabee:scheduler', (e) => renderScheduler(e.detail.data));
+
+  fetch('/api/scheduler').then(r => r.json()).then(renderScheduler);
+
+  window.addEventListener('dabee:log', (e) => {
+    const line = document.createElement('div');
+    line.className = `level-${e.detail.level}`;
+    line.textContent = e.detail.message;
+    logBox.appendChild(line);
+    while (logBox.childElementCount > 500) logBox.removeChild(logBox.firstChild);
+    logBox.scrollTop = logBox.scrollHeight;
+  });
+
+  // 통계
+  fetch('/api/articles?limit=1').then(r => r.json()).then(d => {
+    document.getElementById('statArticles').textContent = d.total ?? '-';
+  });
+  adminFetch('/api/admin/recipients').then(r => r.json()).then(d => {
+    document.getElementById('statRecipients').textContent = Array.isArray(d) ? d.length : '-';
+  });
+
+  // 제어 버튼
+  async function ctrl(path, label) {
+    ctrlEl.textContent = `${label} 요청 중...`;
+    const res = await adminFetch(path, { method: 'POST' });
+    ctrlEl.textContent = res.ok ? `${label} 완료` : `오류 발생`;
+    fetch('/api/scheduler').then(r => r.json()).then(renderScheduler);
+  }
+
+  document.getElementById('btnTrigger').addEventListener('click', () => ctrl('/api/admin/scheduler/trigger', '즉시 실행'));
+  document.getElementById('btnStart').addEventListener('click',   () => ctrl('/api/admin/scheduler/start',   '시작'));
+  document.getElementById('btnStop').addEventListener('click',    () => ctrl('/api/admin/scheduler/stop',    '정지'));
+})();
+</script>
+{% endblock %}

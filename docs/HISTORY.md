@@ -1,125 +1,63 @@
-# DABEE Run — 개발 히스토리
+# 개발 이력 (HISTORY)
 
-> 모든 의미 있는 변경을 시간 역순으로 기록합니다.
+> 매번 작업이 끝날 때 항목을 역순으로 기록합니다.
 > 시스템의 **현재 구조**는 [ARCHITECTURE.md](ARCHITECTURE.md)를 보세요.
 
-각 항목은 다음 형식을 따릅니다:
-
-YYYY-MM-DD — 한 줄 요약
-무엇을 했는가 왜 했는가 어떻게 동작하는가 (필요 시) 남은 일 (있다면)
-
-## 2026-05-02 — STEP 2B: AI 호출 모듈 (관련성·요약·톤분석)
-
-**무엇을**
-- `app/services/gemini_client.py`: Gemini 클라이언트 싱글톤.
-  키 누락 시 None 반환 → 호출자가 폴백 가능.
-- `app/services/relevance.py`: 4단계 관련성 필터
-  (영문제거 → 화이트리스트 → 블랙리스트 → Gemini 배치).
-- `app/services/summarizer.py`: 티어별 모델 선택 + 시스템 프롬프트
-  사용 + description 폴백.
-- `app/services/tone_analyzer.py`: 비우호 문장 추출, 결과 dict
-  (level, tone, hostile_count, total_count, hostile_sentences).
-- `scripts/test_ai.py`: 수집→필터→크롤링→요약→톤분석 통합 검증.
-
-**왜**
-- Gemini 클라이언트를 모듈마다 만들면 중복·일관성 문제 → 싱글톤화.
-- 관련성 필터를 4단계로 나눠 Gemini 호출을 최소화 (90% 이상이
-  화이트/블랙에서 결정 → 비용 절감).
-- summarizer가 본문 크롤링까지 하던 구버전 구조를 분리.
-  파이프라인이 본문을 미리 받아두고 summarizer는 텍스트만 처리 →
-  단일 책임, 테스트 용이.
-- 톤 분석 결과를 단순 라벨이 아닌 dict로 풍부화. PR팀이 가장 원하는
-  "어떤 문장이 비우호적이었나"를 그대로 노출.
-
-**확인 방법**
-- `python -m scripts.test_ai`
-- 관련성 필터 통과, 요약 정상 출력, 톤 레벨/문장 출력 확인
-
-## 2026-05-02 — STEP 2A: 저수준 서비스 모듈 (수집·매체·크롤링)
-
-**무엇을**
-- `app/services/press_resolver.py`: URL → 매체명 단일 소스
-- `app/services/naver_api.py`: 네이버 뉴스 검색 API 호출
-- `app/services/crawler.py`: 기사 본문 크롤링
-- `app/services/settings_store.py`: settings.json 로드/저장
-  (DEFAULT_SETTINGS와 자동 merge)
-- `scripts/test_collect.py`: 위 3종 모듈 통합 동작 확인
-
-**왜**
-- 구버전에서 `PRESS_MAP`이 두 모듈에 중복 → 단일 소스로 통합.
-- 본문 크롤링 로직이 summarizer에 박혀 있어 책임 혼재 →
-  독립 모듈로 분리해 TIER 1 톤 분석 외에도 재사용 가능.
-- 함수 시그니처에서 settings를 인자로 받도록 변경
-  (구버전은 `config.load_settings()` 직접 호출 → 단위 테스트 어려움).
-
-**확인 방법**
-- `python -m scripts.test_collect`
-- 네이버 API에서 기사 수집, 매체명 정상 추출,
-  첫 기사 본문 크롤링 성공 확인
-
-
-## 2026-05-02 — STEP 1: 설정·DB·앱 골격
-
-**무엇을**
-- `app/config.py`: 환경변수·경로·KST 상수 중앙화, `.env` 자동 로드
-- `app/core/db.py`: SQLite 연결 + WAL 모드 + 컨텍스트 매니저
-- `app/core/models.py`: 5개 테이블 DDL (articles / recipients /
-  admin_sessions / send_log / daily_reports) + 인덱스
-- `app/core/logging_setup.py`: KST 포매터, 파일+콘솔 핸들러
-- `app/main.py`: FastAPI 앱, lifespan에서 DB 자동 초기화,
-  `/api/health`와 임시 `/` 엔드포인트
-
-**왜**
-서버가 뜨고 DB가 자동 생성되는 최소 동작 상태를 먼저 확보. 이후
-모든 기능이 이 기반 위에 얹어집니다. 환경변수 검증을 시작 시점에
-수행해 누락이 있어도 앱은 뜨고 경고만 남기도록 설계.
-
-**어떻게**
-- WAL 모드로 동시 읽기·쓰기 가능 → 추후 백그라운드 파이프라인이
-  쓰는 동안 웹 요청이 읽어도 안전
-- `CREATE TABLE IF NOT EXISTS`로 멱등성 확보 → 재시작에 안전
-- 환경변수 미설정 시 앱은 뜨고 기능별 경고만 출력
-
-**확인 방법**
-- `uvicorn app.main:app --reload`
-- http://localhost:8000/api/health → `{"status":"ok","db":"ok"}`
-- `data/articles.db` 파일 자동 생성 확인
-
-
 ---
+
+## 2026-05-03 — STEP 3B: 관리자 인증 + 관리 UI
+
+- **무엇을**: `app/api/admin.py` 전면 재작성, `app/core/repository.py` 확장, `app/main.py` 관리자 라우트 추가, `app/web/templates/admin/` 5개 템플릿, `app/web/static/js/admin/` 3개 JS, `tokens.css` 관리자 스타일 추가.
+- **왜**: STEP 3A에서 인증 없이 노출된 스케줄러 제어 엔드포인트를 보호하고, 키워드·수신자를 웹 UI로 관리할 수 있어야 했음.
+- **어떻게**: `ADMIN_PASSWORD` 단일 비밀번호 → `secrets.compare_digest()` 검증 → 랜덤 토큰을 `admin_sessions` DB에 저장 → HttpOnly SameSite=Lax 쿠키 7일 유지. `require_admin` FastAPI dependency가 모든 `/api/admin/*` 보호. 페이지 라우트는 `get_session()` 헬퍼로 미인증 시 `/admin/login` 리다이렉트.
+- **검증**: `uvicorn app.main:app --reload` → `/admin/login` 로그인 → 대시보드·키워드·수신자 관리 페이지 정상 렌더링, 잘못된 비밀번호 시 401, 미인증 접근 시 로그인 리다이렉트.
+- **남은 일**: 공개 피드 페이지, 일간 리포트 페이지, 일간 리포트 스케줄러 연결(STEP 3C).
+
+## 2026-05-03 — STEP 3A: 스케줄러 + WebSocket + 공개 대시보드 골격
+
+- **무엇을**: `app/core/scheduler.py`, `app/core/ws_manager.py`, `app/api/public.py`, `app/api/admin.py`(스텁), `app/api/ws.py`, `app/main.py` 갱신, `base.html`, `dashboard.html`, `tokens.css`, `common.js`, `dashboard.js` 추가.
+- **왜**: 10분 주기 자동 수집과 실시간 로그 표시, 공개용 첫 화면이 필요했음.
+- **어떻게**: APScheduler 대신 asyncio 기반 단순 루프 + 카운트다운, WebSocket으로 로그/상태 브로드캐스트, Jinja2 템플릿으로 대시보드 렌더링.
+- **검증**: `uvicorn app.main:app --reload` → `/` 접속 시 헤더 상태 표시, 로그 카드 실시간 갱신, `/api/articles?limit=5` 정상 응답.
+- **남은 일**: 관리자 인증, 키워드/수신자 관리 UI(STEP 3B).
+
+## 2026-05-03 — STEP 2C: DB 레포지토리 + 텔레그램 + 파이프라인
+
+- **무엇을**: `app/core/repository.py`, `app/services/recipient_filter.py`, `app/services/telegram_sender.py`, `app/services/pipeline.py`, `scripts/seed_recipient.py`, `scripts/test_pipeline.py` 추가.
+- **왜**: 수집·필터·요약·톤분석 결과를 DB에 저장하고 권한별 수신자에게 텔레그램으로 발송하는 end-to-end 흐름이 필요.
+- **어떻게**: URL 기준 중복 체크(`is_duplicate`), tier 기반 수신자 매칭, HTML parse_mode 메시지 포맷, dry_run/real 두 모드의 통합 테스트 스크립트.
+- **검증**: `python -m scripts.test_pipeline` (dry_run) → 수집/필터/신규 카운트 정상, `seed_recipient` 후 real 모드에서 텔레그램 수신 확인.
+- **남은 일**: 스케줄러 연결 및 WebSocket 브로드캐스트(STEP 3A로 이어짐).
+
+## 2026-05-03 — STEP 2B: AI 모듈 (관련성 / 요약 / 톤분석)
+
+- **무엇을**: `app/services/gemini_client.py`, `relevance.py`, `summarizer.py`, `tone_analyzer.py`, `scripts/test_ai.py` 추가.
+- **왜**: 단순 키워드 매칭만으로는 노이즈가 많고, PR팀에 의미 있는 요약·비우호 신호 분류가 필요.
+- **어떻게**: 4단계 필터(영문제거 → 화이트리스트 → 블랙리스트 → Gemini 배치), tier별 모델 선택 요약, JSON 응답 기반 톤분석 결과 파싱.
+- **검증**: `python -m scripts.test_ai` → 수집 → 필터 통과 수 → 첫 기사 요약/톤레벨 출력 정상.
+- **남은 일**: DB 저장 및 발송 로직(STEP 2C로 이어짐).
+
+## 2026-05-02 — STEP 2A: 수집 서비스 (크롤러·매체명·설정)
+
+- **무엇을**: `app/services/press_resolver.py`, `naver_api.py`, `crawler.py`, `settings_store.py`, `scripts/test_collect.py` 추가.
+- **왜**: 수집 모듈을 단일 소스로 관리하고, 운영 중 변경이 잦은 키워드·필터를 settings.json으로 분리.
+- **어떻게**: `PRESS_MAP` 딕셔너리로 URL→매체명 변환, 크롤링 실패 시 description 폴백, `DEFAULT_SETTINGS` auto-merge.
+- **검증**: `python -m scripts.test_collect` → 네이버 API 수집, 매체명 정상 추출, 본문 크롤링 성공.
+- **남은 일**: AI 관련성 필터·요약·톤분석(STEP 2B로 이어짐).
+
+## 2026-05-02 — STEP 1: 환경설정·DB·앱 뼈대
+
+- **무엇을**: `app/config.py`, `app/core/db.py`, `app/core/models.py`, `app/core/logging_setup.py`, `app/main.py` 구성.
+- **왜**: 서버 시작 시 DB가 자동 생성되는 최소 동작 상태를 먼저 확보.
+- **어떻게**: WAL 모드 SQLite, `CREATE TABLE IF NOT EXISTS`로 멱등 초기화, KST 타임스탬프, FastAPI lifespan.
+- **검증**: `uvicorn app.main:app --reload` → `http://localhost:8000/api/health` → `{"status":"ok","db":"ok"}`, `data/articles.db` 자동 생성 확인.
+- **남은 일**: 수집 서비스(STEP 2A로 이어짐).
 
 ## 2026-05-02 — 프로젝트 시작 (v2 재설계)
 
-**무엇을**
-- 새 폴더 `dabee-run/`에서 처음부터 재구축 시작
-- 폴더 구조·환경변수 템플릿·문서 골격 작성
-- `.env.example`, `.gitignore`, `requirements.txt`, `README.md` 추가
-- `docs/ARCHITECTURE.md`, `docs/HISTORY.md` 작성
+- **무엇을**: 새 디렉터리에서 프로젝트 구조 재설계·시작.
+- **왜**: v1 문제(CSV 파일 5MB 이상 성능 저하, seen_articles.json I/O 병목, main.py 1500줄 HTML 인라인, 수신자별 권한 없음)를 해소하기 위한 전면 재구성.
+- **어떻게**: SQLite 전환, 모듈화(services/api/web 분리), Jinja2 템플릿, 수신자 tier 권한 분리.
+- **남은 일**: STEP 1 → 6 순차 진행.
 
-**왜**
-구버전(v1)이 다음 문제로 한계에 도달:
-- CSV 파일 누적 시 5MB 부근에서 응답 지연·파일 손상 발생
-- `seen_articles.json` 매 사이클 풀로드/풀세이브로 I/O 부담
-- 단일 HTML 페이지에 공개·관리 기능 혼재 → 임원 공유 시 설정 노출
-- 모든 수신자에게 동일 메시지 → 임원 알림 폭탄
-- `main.py`에 1500줄 가까운 HTML 문자열·모든 라우터·파이프라인 혼재
-
-**어떻게**
-v2는 다음 원칙으로 설계:
-1. 저장소를 SQLite로 단일화 (CSV·JSON 누적 폐기)
-2. 공개/관리자 URL·인증 분리
-3. 수신자별 티어·톤 권한 분리
-4. 모듈 책임 분리 (services/api/web 디렉터리)
-5. HTML을 Jinja2 템플릿으로 분리
-
-**남은 일**
-- [ ] STEP 1: 환경 설정 + DB 모듈 (`app/core/`)
-- [ ] STEP 2: 서비스 모듈 이전 (`app/services/`)
-- [ ] STEP 3: API 라우터 + 인증
-- [ ] STEP 4: 공개 페이지 (대시보드·피드·리포트)
-- [ ] STEP 5: 관리자 페이지
-- [ ] STEP 6: Railway 배포·구버전 데이터 마이그레이션
-
----
-
-<!-- 새 항목은 이 위에 추가 -->
+<!-- 새 항목은 맨 위에 추가 -->

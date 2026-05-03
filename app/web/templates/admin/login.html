@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>관리자 로그인 — DABEE Run</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/tokens.css" />
+</head>
+<body class="login-body">
+  <div class="login-wrap">
+    <div class="login-brand">
+      <span class="brand-name">DABEE</span><span class="brand-suffix">Run</span>
+    </div>
+    <p class="login-sub">관리자 전용 영역</p>
+    <form class="login-form" id="loginForm">
+      <input
+        type="password" id="pwInput" class="input-field"
+        placeholder="비밀번호" autocomplete="current-password"
+        autofocus
+      />
+      <div class="error-msg" id="loginError"></div>
+      <button type="submit" class="btn btn-primary btn-full">로그인</button>
+    </form>
+    <a href="/" class="back-link">← 공개 대시보드로</a>
+  </div>
+
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pw    = document.getElementById('pwInput').value;
+      const errEl = document.getElementById('loginError');
+      const btn   = e.target.querySelector('button[type=submit]');
+      errEl.textContent = '';
+      btn.disabled = true;
+      btn.textContent = '로그인 중...';
+
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pw }),
+        });
+        if (res.ok) {
+          location.href = '/admin';
+        } else {
+          const data = await res.json().catch(() => ({}));
+          errEl.textContent = data.detail || '로그인 실패';
+          btn.disabled = false;
+          btn.textContent = '로그인';
+        }
+      } catch {
+        errEl.textContent = '네트워크 오류';
+        btn.disabled = false;
+        btn.textContent = '로그인';
+      }
+    });
+  </script>
+</body>
+</html>

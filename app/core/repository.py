@@ -150,6 +150,39 @@ def recipient_list_active() -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def recipient_list_all() -> list[dict]:
+    """관리자용: 비활성 포함 전체 수신자 목록."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM recipients ORDER BY id"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def recipient_update(rid: int, **kwargs) -> bool:
+    allowed = {
+        "name", "role", "enabled",
+        "receive_tier1_warn", "receive_tier1_watch", "receive_tier1_good",
+        "receive_tier2", "receive_tier3", "receive_daily_report",
+    }
+    fields = {k: v for k, v in kwargs.items() if k in allowed}
+    if not fields:
+        return False
+    set_clause = ", ".join(f"{k} = ?" for k in fields)
+    values = list(fields.values()) + [rid]
+    with get_conn() as conn:
+        cur = conn.execute(
+            f"UPDATE recipients SET {set_clause} WHERE id = ?", values
+        )
+    return cur.rowcount > 0
+
+
+def recipient_delete(rid: int) -> bool:
+    with get_conn() as conn:
+        cur = conn.execute("DELETE FROM recipients WHERE id = ?", (rid,))
+    return cur.rowcount > 0
+
+
 def recipient_add(chat_id: str, name: str, role: str = "",
                   permissions: Optional[dict] = None) -> Optional[int]:
     """
@@ -195,6 +228,38 @@ def recipient_add(chat_id: str, name: str, role: str = "",
         else:
             logger.error(f"❌ 수신자 추가 실패: {e}")
         return None
+
+
+# ════════════════════════════════════════════════════════════
+#  Admin Sessions
+# ════════════════════════════════════════════════════════════
+def session_create(token: str, user_agent: str, expires_at: str) -> None:
+    created_at = datetime.now(config.KST).isoformat()
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO admin_sessions (token, created_at, expires_at, user_agent)"
+            " VALUES (?,?,?,?)",
+            (token, created_at, expires_at, user_agent),
+        )
+
+
+def session_get(token: str) -> Optional[dict]:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM admin_sessions WHERE token = ?", (token,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def session_delete(token: str) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM admin_sessions WHERE token = ?", (token,))
+
+
+def session_cleanup() -> None:
+    now = datetime.now(config.KST).isoformat()
+    with get_conn() as conn:
+        conn.execute("DELETE FROM admin_sessions WHERE expires_at < ?", (now,))
 
 
 # ════════════════════════════════════════════════════════════

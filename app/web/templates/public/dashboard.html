@@ -1,0 +1,39 @@
+﻿{% extends "base.html" %}
+{% block title %}대시보드 — DABEE Run{% endblock %}
+
+{% block content %}
+<section class="dashboard">
+  <div class="card">
+    <div class="card-title">스케줄러 상태</div>
+    <div class="scheduler-grid">
+      <div>
+        <div class="metric-label">상태</div>
+        <div class="metric-value" id="schedPhase">-</div>
+      </div>
+      <div>
+        <div class="metric-label">완료 사이클</div>
+        <div class="metric-value" id="schedCycle">-</div>
+      </div>
+      <div>
+        <div class="metric-label">다음 실행까지</div>
+        <div class="metric-value" id="schedNext">-</div>
+      </div>
+    </div>
+    <div class="last-result" id="schedLast">마지막 결과: 없음</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">실시간 로그</div>
+    <div class="log-box" id="logBox"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">최근 기사 <span class="muted" id="articleTotal"></span></div>
+    <div id="articleList" class="article-list">불러오는 중...</div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/dashboard.js"></script>
+{% endblock %}

@@ -1,0 +1,72 @@
+{% extends "admin/base_admin.html" %}
+{% block title %}수신자 관리{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">수신자 관리</h1>
+  <button class="btn btn-primary" id="addBtn">+ 수신자 추가</button>
+</div>
+
+<div class="card" style="padding:0; overflow:hidden;">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th style="width:40px;">#</th>
+        <th>이름</th>
+        <th>Chat ID</th>
+        <th>역할</th>
+        <th>수신 권한</th>
+        <th style="width:60px;">활성</th>
+        <th style="width:70px;"></th>
+      </tr>
+    </thead>
+    <tbody id="recipientBody">
+      <tr><td colspan="7" class="muted" style="text-align:center;padding:24px;">불러오는 중...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 추가 모달 -->
+<div class="modal-backdrop hidden" id="addModal">
+  <div class="modal">
+    <div class="modal-title">수신자 추가</div>
+    <form id="addForm">
+      <div class="modal-grid" style="margin-bottom:var(--space-4);">
+        <div class="form-group">
+          <label>텔레그램 Chat ID <span style="color:var(--color-warn)">*</span></label>
+          <input id="fChatId" class="input-field" placeholder="-1001234567890" required />
+        </div>
+        <div class="form-group">
+          <label>이름 <span style="color:var(--color-warn)">*</span></label>
+          <input id="fName" class="input-field" placeholder="홍길동" required />
+        </div>
+        <div class="form-group">
+          <label>역할</label>
+          <input id="fRole" class="input-field" placeholder="PR팀장" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>수신 권한</label>
+        <div class="perm-grid" style="margin-top:8px;">
+          <label class="perm-item"><input type="checkbox" id="pT1w"   checked /> TIER 1 경고</label>
+          <label class="perm-item"><input type="checkbox" id="pT1wa"  checked /> TIER 1 주의</label>
+          <label class="perm-item"><input type="checkbox" id="pT1g"   checked /> TIER 1 양호</label>
+          <label class="perm-item"><input type="checkbox" id="pT2"    checked /> TIER 2</label>
+          <label class="perm-item"><input type="checkbox" id="pT3"           /> TIER 3</label>
+          <label class="perm-item"><input type="checkbox" id="pDaily" checked /> 일간 리포트</label>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="modalClose">취소</button>
+        <button type="submit" class="btn btn-primary">추가</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/admin/recipients.js"></script>
+{% endblock %}

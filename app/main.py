@@ -1,87 +1,144 @@
-# app/main.py
+﻿# app/main.py
 """
 FastAPI 진입점.
 
-이 파일은 다음만 담당합니다:
+이 파일은 다음을 담당:
 - 앱 인스턴스 생성
-- 시작/종료 이벤트 (DB 초기화 등)
-- 라우터 등록 (현재는 health 하나)
+- 시작/종료 lifespan (DB 초기화, 스케줄러 시작/종료, WS 로그 핸들러 부착)
+- 라우터 등록 (public, admin, ws)
+- Jinja2 템플릿 + 정적 파일 마운트
+- 루트 페이지 (대시보드 렌더)
 
-비즈니스 로직은 app/services/, 라우팅 상세는 app/api/ 에 위치.
+비즈니스 로직은 app/services/, 라우팅 상세는 app/api/.
 """
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from app import config
+from app.api import admin as admin_router
+from app.api import public as public_router
+from app.api import ws as ws_router
+from app.api.admin import get_session
 from app.core.db import init_db
 from app.core.logging_setup import setup_logging
+from app.core.scheduler import scheduler
+from app.core.ws_manager import attach_ws_log_handler
 
 
-# ── 로깅을 가장 먼저 초기화 ──────────────────────────────────────────
+# ── 로깅을 가장 먼저 ──────────────────────────────────────────
 setup_logging()
 logger = logging.getLogger(__name__)
 
 
-# ── 라이프스팬 (앱 시작/종료 훅) ─────────────────────────────────────
+# ── 라이프스팬 ────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 시작 시
+    # ─ 시작 ─
     logger.info("=" * 60)
     logger.info("DABEE Run 시작")
     logger.info(f"DATA_DIR = {config.DATA_DIR}")
     logger.info(f"DB_PATH  = {config.DB_PATH}")
 
-    # 환경변수 누락 경고
     for w in config.validate():
         logger.warning(f"⚠️  {w}")
 
-    # DB 초기화 (테이블 자동 생성)
     init_db()
+    attach_ws_log_handler()
+    await scheduler.start()
 
     logger.info("=" * 60)
     yield
-    # 종료 시
-    logger.info("DABEE Run 종료")
+    # ─ 종료 ─
+    logger.info("DABEE Run 종료 시작")
+    await scheduler.stop()
+    logger.info("DABEE Run 종료 완료")
 
 
-# ── 앱 인스턴스 ──────────────────────────────────────────────────────
+# ── 앱 ────────────────────────────────────────────────────────
 app = FastAPI(
     title="DABEE Run",
     description="SK하이닉스 PR팀 뉴스 모니터링",
-    version="2.0.0",
+    version="3.0.0",
     lifespan=lifespan,
 )
 
+# 정적 파일
+WEB_ROOT = Path(__file__).resolve().parent / "web"
+app.mount("/static", StaticFiles(directory=WEB_ROOT / "static"), name="static")
 
-# ── 헬스체크 ─────────────────────────────────────────────────────────
-@app.get("/api/health")
-async def health():
-    """
-    Railway healthcheckPath 및 운영 모니터링용.
-    DB가 정상 응답하는지까지 확인합니다.
-    """
-    from app.core.db import get_conn
-    try:
-        with get_conn() as conn:
-            conn.execute("SELECT 1").fetchone()
-        return JSONResponse({"status": "ok", "db": "ok"})
-    except Exception as e:
-        logger.error(f"헬스체크 DB 실패: {e}")
-        return JSONResponse(
-            {"status": "error", "db": "fail", "error": str(e)},
-            status_code=503,
-        )
+# 템플릿
+templates = Jinja2Templates(directory=str(WEB_ROOT / "templates"))
+
+# 라우터
+app.include_router(public_router.router, prefix="/api",       tags=["public"])
+app.include_router(admin_router.router,  prefix="/api/admin", tags=["admin"])
+app.include_router(ws_router.router,                          tags=["websocket"])
 
 
-# ── 임시 루트 (다음 단계에서 대시보드로 교체) ────────────────────────
-@app.get("/")
-async def root():
-    return JSONResponse({
-        "service": "DABEE Run",
-        "version": "2.0.0",
-        "message": "STEP 1 동작 확인용 응답입니다. 곧 대시보드로 교체됩니다.",
-    })
+# ── 페이지 ────────────────────────────────────────────────────
+@app.get("/", response_class=HTMLResponse)
+async def page_home(request: Request):
+    return templates.TemplateResponse(
+        "public/dashboard.html",
+        {"request": request, "active": "home"},
+    )
+
+
+@app.get("/feed", response_class=HTMLResponse)
+async def page_feed(request: Request):
+    """STEP 3C에서 본격 구성. 임시로 대시보드와 동일."""
+    return templates.TemplateResponse(
+        "public/dashboard.html",
+        {"request": request, "active": "feed"},
+    )
+
+
+@app.get("/report", response_class=HTMLResponse)
+async def page_report(request: Request):
+    """STEP 3C에서 본격 구성."""
+    return templates.TemplateResponse(
+        "public/dashboard.html",
+        {"request": request, "active": "report"},
+    )
+
+
+# ── 관리자 페이지 ──────────────────────────────────────────────
+@app.get("/admin/login", response_class=HTMLResponse)
+async def admin_login_page(request: Request):
+    if get_session(request):
+        return RedirectResponse("/admin")
+    return templates.TemplateResponse("admin/login.html", {"request": request})
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_dashboard_page(request: Request):
+    if not get_session(request):
+        return RedirectResponse("/admin/login")
+    return templates.TemplateResponse(
+        "admin/dashboard.html", {"request": request, "active": "dashboard"}
+    )
+
+
+@app.get("/admin/keywords", response_class=HTMLResponse)
+async def admin_keywords_page(request: Request):
+    if not get_session(request):
+        return RedirectResponse("/admin/login")
+    return templates.TemplateResponse(
+        "admin/keywords.html", {"request": request, "active": "keywords"}
+    )
+
+
+@app.get("/admin/recipients", response_class=HTMLResponse)
+async def admin_recipients_page(request: Request):
+    if not get_session(request):
+        return RedirectResponse("/admin/login")
+    return templates.TemplateResponse(
+        "admin/recipients.html", {"request": request, "active": "recipients"}
+    )
