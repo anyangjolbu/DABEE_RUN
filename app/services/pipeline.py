@@ -115,8 +115,15 @@ def run_once(dry_run: bool = False,
 
         else:  # reference
             reference_cnt += 1
-            # 본문 크롤링 X, 톤 분류 X
+            # 본문 크롤링 X, 톤 분류 X — 다만 분류는 '참고'로 명시 저장
             summary = summarizer.summarize(article, settings)
+            tone = {
+                "classification": "참고",
+                "reason":         "참고 트랙 (톤 분석 미적용)",
+                "confidence":     "n/a",
+                "hostile_sentences": [],
+                "total_sentences": 0,
+            }
 
         # ── dry_run ──────────────────────────────────────
         if dry_run:
