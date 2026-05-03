@@ -27,6 +27,23 @@ from app.services import (
 logger = logging.getLogger(__name__)
 
 
+# STEP-3B-11: reference → monitor 승격 트리거 키워드
+# 본문에 이 중 하나라도 등장하면 reference도 톤 분석 진행
+PROMOTE_KEYWORDS = ("SK하이닉스", "하이닉스", "SKhynix", "hynix",
+                    "솔리다임", "곽노정", "최태원")
+
+
+def _body_has_priority_target(body: str) -> bool:
+    """본문에 핵심 모니터링 대상이 등장하는지 확인."""
+    if not body:
+        return False
+    body_lower = body.lower()
+    for kw in PROMOTE_KEYWORDS:
+        if kw.lower() in body_lower:
+            return True
+    return False
+
+
 def run_once(dry_run: bool = False,
              max_articles: Optional[int] = None) -> dict:
     """
@@ -114,16 +131,34 @@ def run_once(dry_run: bool = False,
             summary = summarizer.summarize(article, settings)
 
         else:  # reference
-            reference_cnt += 1
-            # 본문 크롤링 X, 톤 분류 X — 다만 분류는 '참고'로 명시 저장
-            summary = summarizer.summarize(article, settings)
-            tone = {
-                "classification": "참고",
-                "reason":         "참고 트랙 (톤 분석 미적용)",
-                "confidence":     "n/a",
-                "hostile_sentences": [],
-                "total_sentences": 0,
-            }
+            # STEP-3B-11: 본문 크롤링 후 SK하이닉스 등 핵심 키워드 등장 시 monitor 승격
+            url = article.get("originallink") or article.get("link", "")
+            body, image_url = crawler.fetch_body_full(url)
+            if body:
+                article["_crawled_body"] = body
+            if image_url:
+                article["image_url"] = image_url
+
+            if _body_has_priority_target(body):
+                # 승격: monitor로 처리
+                logger.info(f"  🆙 reference → monitor 승격 (본문에 SK하이닉스 등 등장)")
+                article["track"] = "monitor"
+                track = "monitor"
+                monitor_cnt += 1
+
+                tone = tone_analyzer.analyze_tone(article, theme_label, settings)
+                summary = summarizer.summarize(article, settings)
+            else:
+                # 일반 reference: 톤 분석 없이 '참고'로 저장
+                reference_cnt += 1
+                summary = summarizer.summarize(article, settings)
+                tone = {
+                    "classification": "참고",
+                    "reason":         "참고 트랙 (본문에 SK하이닉스 미등장)",
+                    "confidence":     "n/a",
+                    "hostile_sentences": [],
+                    "total_sentences": 0,
+                }
 
         # ── dry_run ──────────────────────────────────────
         if dry_run:

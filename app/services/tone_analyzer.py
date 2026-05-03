@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 MONITOR_TARGETS = "SK하이닉스, 하이닉스, 솔리다임, 곽노정(SK하이닉스 대표), 최태원(SK 그룹 회장)"
 
 # 본문 입력 한도 (토큰 절약)
-BODY_LIMIT = 1800
+BODY_LIMIT = 2500
 HOSTILE_LIMIT = 3
 
 
@@ -59,6 +59,46 @@ TONE_RESPONSE_SCHEMA = {
     "required": ["classification", "reason", "confidence",
                  "hostile_sentences", "total_sentences"],
 }
+
+
+# 모니터링 대상 키워드 (우선 추출용 — tone_analyzer 내부)
+_PRIORITY_TARGETS = ("SK하이닉스", "하이닉스", "솔리다임", "곽노정", "최태원")
+
+
+def _extract_relevant_section(body: str, limit: int, window: int = 800) -> str:
+    """
+    본문에서 모니터링 대상이 등장하는 위치 ±window 자만 추출.
+    여러 등장 시 합쳐서 limit 자 이내로 압축.
+    """
+    spans = []  # (start, end) 쌍
+    for t in _PRIORITY_TARGETS:
+        idx = body.find(t)
+        while idx >= 0:
+            s = max(0, idx - window // 2)
+            e = min(len(body), idx + len(t) + window // 2)
+            spans.append((s, e))
+            idx = body.find(t, e)
+
+    if not spans:
+        # 등장 없음 → 앞부분 그대로 (Gemini가 '관련없음' 판정해도 정상)
+        return body[:limit]
+
+    # 겹치는 span 병합
+    spans.sort()
+    merged = [spans[0]]
+    for s, e in spans[1:]:
+        if s <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], e))
+        else:
+            merged.append((s, e))
+
+    # 합친 텍스트가 limit 넘으면 비례 축소
+    pieces = [body[s:e] for s, e in merged]
+    joined = "\n[…]\n".join(pieces)
+    if len(joined) <= limit:
+        return joined
+    # 너무 길면 첫 등장 위주로
+    return joined[:limit]
 
 
 def _clean(text: str) -> str:
@@ -98,6 +138,10 @@ def analyze_tone(article: dict, theme_label: str, settings: dict) -> dict:
     title       = _clean(article.get("title", ""))
     description = _clean(article.get("description", ""))
     body        = article.get("_crawled_body", "")
+
+    # 본문이 BODY_LIMIT 초과 시, 모니터링 대상 등장 부분 우선 추출
+    if body and len(body) > BODY_LIMIT:
+        body = _extract_relevant_section(body, BODY_LIMIT)
 
     model = settings.get("gpt_model_tone", "gemini-flash-latest")
 
