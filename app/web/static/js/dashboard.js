@@ -59,8 +59,14 @@
 
     const titleAttr = reason ? `title="${esc(reason)}"` : '';
 
+    const thumbInner = a.image_url
+      ? `<img class="thumb-img" src="${esc(a.image_url)}" alt="" loading="lazy" onerror="this.parentElement.classList.add('thumb-fallback');this.remove();">`
+      : '';
+    const thumbClass = a.image_url ? `thumb has-image` : `thumb ${g} thumb-fallback`;
+
     art.innerHTML = `
-      <div class="thumb ${g}">
+      <div class="${thumbClass}">
+        ${thumbInner}
         ${meta.label ? `<span class="thumb-badge badge-${meta.tag}">${meta.label}</span>` : ''}
         ${t ? `<div class="thumb-time">${t}</div>` : ''}
         ${meta.strip ? `<div class="tone-strip ${meta.strip}"></div>` : ''}

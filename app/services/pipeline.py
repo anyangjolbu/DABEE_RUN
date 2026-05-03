@@ -99,11 +99,13 @@ def run_once(dry_run: bool = False,
         if track == "monitor":
             monitor_cnt += 1
 
-            # 본문 크롤링
+            # 본문 + 이미지 크롤링 (1회 HTTP 요청)
             url = article.get("originallink") or article.get("link", "")
-            body = crawler.fetch_body(url)
+            body, image_url = crawler.fetch_body_full(url)
             if body:
                 article["_crawled_body"] = body
+            if image_url:
+                article["image_url"] = image_url
 
             # 톤 분류
             tone = tone_analyzer.analyze_tone(article, theme_label, settings)

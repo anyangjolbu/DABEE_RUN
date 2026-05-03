@@ -781,3 +781,27 @@ table.rcp { width: 100%; border-collapse: collapse; }
 .dot-hostile   { background: #DC2626; }
 .dot-normal    { background: #10B981; }
 .dot-reference { background: #94A3B8; }
+/* ═════════════════════════════════════════════════════════
+   STEP-4B: card image thumbnail
+   ═════════════════════════════════════════════════════════ */
+.thumb {
+  position: relative;
+  overflow: hidden;
+}
+.thumb.has-image {
+  background: #F3F4F6;  /* 이미지 로딩 중 회색 */
+}
+.thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.3s ease;
+}
+.card-article:hover .thumb-img {
+  transform: scale(1.04);
+}
+/* 이미지 로드 실패 시 onerror로 thumb-fallback 클래스 추가 → 그라디언트로 폴백 */
+.thumb.thumb-fallback {
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 50%, #EC4899 100%);
+}
