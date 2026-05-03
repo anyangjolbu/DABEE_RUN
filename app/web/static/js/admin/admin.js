@@ -10,17 +10,12 @@ async function adminFetch(url, options = {}) {
   return res;
 }
 
-let _toastWrap = null;
 function toast(msg, type = 'ok') {
-  if (!_toastWrap) {
-    _toastWrap = document.createElement('div');
-    _toastWrap.className = 'toast-wrap';
-    document.body.appendChild(_toastWrap);
-  }
+  const wrap = document.getElementById('toastWrap') || document.body;
   const el = document.createElement('div');
   el.className = `toast ${type}`;
   el.textContent = msg;
-  _toastWrap.appendChild(el);
+  wrap.appendChild(el);
   setTimeout(() => el.remove(), 3000);
 }
 

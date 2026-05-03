@@ -1,37 +1,127 @@
-﻿{% extends "base.html" %}
-{% block title %}대시보드 — DABEE Run{% endblock %}
+{% extends "base.html" %}
+{% block title %}DABEE Run — SK하이닉스 뉴스 모니터링{% endblock %}
 
 {% block content %}
-<section class="dashboard">
-  <div class="card">
-    <div class="card-title">스케줄러 상태</div>
-    <div class="scheduler-grid">
+
+<!-- Hero -->
+<section class="hero-wrap">
+  <div class="container hero">
+    <div class="hero-left">
       <div>
-        <div class="metric-label">상태</div>
-        <div class="metric-value" id="schedPhase">-</div>
+        <div class="hero-kicker">
+          <span class="pill white">DABEE RUN 브리프</span>
+          <span class="pill positive" id="heroPill">오늘의 톤: 분석 중</span>
+        </div>
+        <h2 class="hero-title" id="heroTitle">
+          오늘의 SK하이닉스<br>
+          여론을 분석 중입니다
+        </h2>
+        <p class="hero-desc" id="heroDesc">
+          수집된 기사를 바탕으로 여론 방향을 분석합니다.
+        </p>
+        <div class="hero-meta" id="heroMeta">
+          <span>데이터 로딩 중...</span>
+        </div>
       </div>
-      <div>
-        <div class="metric-label">완료 사이클</div>
-        <div class="metric-value" id="schedCycle">-</div>
-      </div>
-      <div>
-        <div class="metric-label">다음 실행까지</div>
-        <div class="metric-value" id="schedNext">-</div>
+      <div class="hero-bottom">
+        <div class="mini-stat">
+          <span>Sentiment Index</span>
+          <b class="tnum" id="heroScore">—</b>
+        </div>
+        <div class="mini-stat">
+          <span>우호 기사 비중</span>
+          <b id="heroGood">—</b>
+        </div>
+        <div class="mini-stat">
+          <span>비우호 기사 비중</span>
+          <b id="heroWarn">—</b>
+        </div>
       </div>
     </div>
-    <div class="last-result" id="schedLast">마지막 결과: 없음</div>
-  </div>
 
-  <div class="card">
-    <div class="card-title">실시간 로그</div>
-    <div class="log-box" id="logBox"></div>
-  </div>
+    <div class="hero-right">
+      <div class="trend-panel">
+        <div class="trend-head">
+          <div>
+            <h3>여론 추이</h3>
+            <p>최근 7일 기준 Sentiment Index 흐름</p>
+          </div>
+          <div class="index-chip">
+            <span>Today</span>
+            <b class="tnum" id="trendScore">—</b>
+          </div>
+        </div>
+        <svg class="chart" id="trendChart" viewBox="0 0 520 160" preserveAspectRatio="none" aria-hidden="true">
+          <line x1="0" y1="20"  x2="520" y2="20"  stroke="#E5E7EB"/>
+          <line x1="0" y1="60"  x2="520" y2="60"  stroke="#E5E7EB"/>
+          <line x1="0" y1="100" x2="520" y2="100" stroke="#E5E7EB"/>
+          <line x1="0" y1="140" x2="520" y2="140" stroke="#E5E7EB"/>
+          <path id="trend-area" fill="url(#paint0_linear)" opacity="0.18"/>
+          <path id="trend-line" stroke="url(#paint1_linear)" stroke-width="4" stroke-linecap="round" fill="none"/>
+          <g id="trend-points"></g>
+          <g id="trend-labels"></g>
+          <defs>
+            <linearGradient id="paint0_linear" x1="20" y1="48" x2="500" y2="140" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#2563EB"/><stop offset="1" stop-color="#38BDF8"/>
+            </linearGradient>
+            <linearGradient id="paint1_linear" x1="20" y1="48" x2="500" y2="112" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#2563EB"/><stop offset="1" stop-color="#38BDF8"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <div class="trend-legend">
+          <span class="legend"><i class="dot" style="background:#2563eb"></i> Sentiment Index</span>
+          <span class="legend"><i class="dot" style="background:#10b981"></i> 우호 증가</span>
+        </div>
+      </div>
 
-  <div class="card">
-    <div class="card-title">최근 기사 <span class="muted" id="articleTotal"></span></div>
-    <div id="articleList" class="article-list">불러오는 중...</div>
+      <div class="sentiment-summary">
+        <div class="summary-box positive">
+          <span class="label">우호</span>
+          <div class="value" id="sumGood">—</div>
+          <div class="sub" id="sumGoodSub">HBM · AI 서버 · 실적</div>
+        </div>
+        <div class="summary-box negative">
+          <span class="label">비우호</span>
+          <div class="value" id="sumWarn">—</div>
+          <div class="sub" id="sumWarnSub">경쟁사 · 리스크</div>
+        </div>
+        <div class="summary-box neutral">
+          <span class="label">중립</span>
+          <div class="value" id="sumNeut">—</div>
+          <div class="sub">시장 동향 · 일반</div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
+
+<!-- Section bar -->
+<section class="section-bar">
+  <div class="container section-bar-inner">
+    <div class="section-tabs">
+      <span class="tab active" data-tab="all">전체 기사</span>
+      <span class="tab" data-tab="good">우호 기사</span>
+      <span class="tab" data-tab="warn">비우호 기사</span>
+    </div>
+    <div class="section-date" id="sectionDate">—</div>
+  </div>
+</section>
+
+<!-- Cards -->
+<main class="container cards-section">
+  <div class="new-alert hidden" id="newAlert">
+    <span>⚡ 신규 기사가 수집되었습니다.</span>
+    <button id="newAlertBtn">새로고침</button>
+  </div>
+  <div class="cards-grid" id="cardsGrid">
+    <!-- JS로 렌더링 -->
+  </div>
+  <div class="feed-more" id="feedMore" style="display:none;">
+    <button class="btn btn-sm" id="loadMoreBtn" style="margin:0 auto;">더 보기</button>
+  </div>
+</main>
+
 {% endblock %}
 
 {% block scripts %}

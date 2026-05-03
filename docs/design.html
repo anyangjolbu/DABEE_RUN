@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>DABEE RUN — Preview v2</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:#f4f5f7;
+  --surface:#fff;
+  --surface-2:#eaf2fa;
+  --jtbc-blue:#043A66;
+  --navy:#07111f;
+  --blue:#2563eb;
+  --sky:#7ec8ff;
+  --sky-soft:#cfe8ff;
+  --tone-good:#10b981;
+  --tone-warn:#ef4444;
+  --tone-watch:#f59e0b;
+  --tone-neut:#475569;
+  --text:#111827;
+  --ink-2:#374151;
+  --muted:#6b7280;
+  --line:#e5e7eb;
+
+  --font-display:"Pretendard","Inter",system-ui,sans-serif;
+  --font-body:"Pretendard","Inter",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,monospace;
+
+  --r-md:14px; --r-lg:18px; --r-xl:22px;
+  --shadow-card:0 12px 24px rgba(15,23,42,.04);
+  --shadow-trend:0 14px 30px rgba(15,23,42,.06);
+  --ease:cubic-bezier(.2,.7,.2,1);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:var(--font-body);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;font-feature-settings:"ss01","tnum"}
+a{text-decoration:none;color:inherit}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0}
+.tnum{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--font-mono)}
+.container{width:min(1400px, calc(100% - 40px));margin:0 auto}
+
+/* preview toggle */
+.viewbar{position:fixed;right:16px;bottom:16px;z-index:80;display:flex;gap:6px;background:#0b1220;border:1px solid #1f2937;border-radius:999px;padding:4px;box-shadow:0 12px 30px rgba(0,0,0,.35)}
+.viewbar button{padding:8px 14px;border-radius:999px;font-size:12px;color:#cbd5e1;letter-spacing:.04em}
+.viewbar button.on{background:#fff;color:#0b1220;font-weight:800}
+.view{display:none}
+.view.on{display:block}
+
+/* ============== PUBLIC ============== */
+.topbar{height:78px;background:var(--surface);border-bottom:1px solid var(--line)}
+.topbar-inner{height:100%;display:flex;align-items:center;justify-content:space-between;gap:24px}
+.brand{display:flex;align-items:center;gap:18px;min-width:0;flex-wrap:wrap}
+.logo{margin:0;display:flex;align-items:flex-end;gap:8px;font-family:var(--font-display);font-size:40px;line-height:.9;letter-spacing:-0.075em;font-weight:900;white-space:nowrap}
+.logo .dabee{color:#0f172a}
+.logo .run{background:linear-gradient(135deg,#9ed2ff 0%,#4f92c9 45%,#1d5f98 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.nav{display:flex;align-items:center;gap:28px;color:var(--ink-2);font-size:16px;font-weight:700;flex-wrap:wrap}
+.nav a{position:relative}
+.nav .live{color:#dc2626;padding-left:16px}
+.nav .live::before{content:"";width:8px;height:8px;border-radius:50%;background:#dc2626;position:absolute;left:0;top:50%;transform:translateY(-50%);animation:pulseRed 1.4s var(--ease) infinite}
+@keyframes pulseRed{50%{box-shadow:0 0 0 6px rgba(220,38,38,0)}}
+.icons{display:flex;gap:14px;color:var(--ink-2);font-size:22px;align-items:center}
+.icon-btn{width:36px;height:36px;border-radius:999px;display:grid;place-items:center;border:1px solid transparent;transition:background .15s var(--ease)}
+.icon-btn:hover{background:#f1f5f9}
+
+/* hero */
+.hero-wrap{background:var(--surface);border-bottom:1px solid var(--line)}
+.hero{display:grid;grid-template-columns:1.1fr 1fr;min-height:360px}
+.hero-left{background:var(--jtbc-blue);color:#fff;padding:42px 46px;display:flex;flex-direction:column;justify-content:space-between}
+.hero-kicker{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;font-size:12px;font-weight:800;white-space:nowrap}
+.pill.white{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.18);color:#fff}
+.pill.positive{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);color:#d9efff}
+.hero-title{margin:0;font-family:var(--font-display);font-size:52px;line-height:1.02;letter-spacing:-0.07em;font-weight:800;word-break:keep-all;color:#fff}
+.hero-title .accent{color:var(--sky-soft)}
+.hero-desc{margin:16px 0 0;color:rgba(255,255,255,.84);font-size:18px;line-height:1.7;max-width:760px;word-break:keep-all}
+.hero-meta{display:flex;gap:18px;flex-wrap:wrap;margin-top:22px;color:rgba(255,255,255,.76);font-size:14px;font-weight:600}
+.hero-bottom{margin-top:28px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.mini-stat{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:14px;backdrop-filter:blur(2px)}
+.mini-stat span{display:block;color:rgba(255,255,255,.70);font-size:12px;margin-bottom:6px}
+.mini-stat b{display:block;font-size:30px;line-height:1;letter-spacing:-0.06em;color:#fff;font-variant-numeric:tabular-nums}
+.hero-right{background:var(--surface-2);padding:28px;display:grid;gap:18px;align-content:center}
+
+.trend-panel{background:#fff;border-radius:22px;padding:22px;border:1px solid rgba(15,23,42,.06);box-shadow:var(--shadow-trend)}
+.trend-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px}
+.trend-head h3{margin:0;font-size:22px;letter-spacing:-0.04em}
+.trend-head p{margin:6px 0 0;font-size:13px;color:var(--muted)}
+.index-chip{min-width:90px;text-align:right}
+.index-chip span{display:block;color:var(--muted);font-size:12px;margin-bottom:2px}
+.index-chip b{font-size:34px;line-height:1;letter-spacing:-0.07em;color:#0f172a;font-variant-numeric:tabular-nums}
+.chart{width:100%;height:160px;display:block}
+.trend-legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--muted)}
+.legend{display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+
+.sentiment-summary{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.summary-box{background:#fff;border:1px solid rgba(15,23,42,.06);border-radius:18px;padding:16px;box-shadow:var(--shadow-card)}
+.summary-box .label{font-size:12px;color:var(--muted);margin-bottom:8px;display:block}
+.summary-box .value{font-size:26px;font-weight:800;letter-spacing:-0.05em;line-height:1;margin-bottom:8px;font-variant-numeric:tabular-nums}
+.summary-box .sub{font-size:12px;color:var(--muted)}
+.summary-box.positive .value{color:var(--tone-good)}
+.summary-box.negative .value{color:var(--tone-warn)}
+.summary-box.neutral .value{color:var(--tone-neut)}
+
+/* section bar */
+.section-bar{background:#fff;border-bottom:1px solid var(--line)}
+.section-bar-inner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 0}
+.section-tabs{display:flex;gap:26px;align-items:center;font-size:16px;font-weight:700;color:#94a3b8}
+.section-tabs .active{color:#0f172a;position:relative;padding-bottom:12px}
+.section-tabs .active::after{content:"";position:absolute;left:0;right:0;bottom:-18px;height:3px;border-radius:999px;background:#1d4ed8}
+.section-date{font-size:16px;font-weight:800;color:#0f172a;display:flex;gap:10px;align-items:center}
+
+/* cards */
+.cards-section{padding:36px 0 48px}
+.cards-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:28px 18px}
+.card{background:transparent}
+.thumb{position:relative;aspect-ratio:16/10;overflow:hidden;background:#dbe7f4;margin-bottom:14px}
+.thumb::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,rgba(0,0,0,.12) 100%)}
+.thumb.g1{background:linear-gradient(135deg,#173b69,#5a8fd1)}
+.thumb.g2{background:linear-gradient(135deg,#75503d,#d0a97f)}
+.thumb.g3{background:linear-gradient(135deg,#512d3a,#d2707d)}
+.thumb.g4{background:linear-gradient(135deg,#1f4d4a,#6aa8a2)}
+.thumb.g5{background:linear-gradient(135deg,#243b72,#95a4d9)}
+.thumb.g6{background:linear-gradient(135deg,#6b4a1c,#cfa45c)}
+.thumb.g7{background:linear-gradient(135deg,#5c1f45,#d96fa7)}
+.thumb.g8{background:linear-gradient(135deg,#12425f,#4eb4d9)}
+.thumb-tier{position:absolute;left:10px;top:10px;z-index:2;background:#fff;color:#0f172a;font:800 10px/1 var(--font-mono);letter-spacing:.16em;padding:6px 8px;border-radius:6px}
+.thumb-tier.t1{background:#0f172a;color:#fff}
+.thumb-badge{position:absolute;right:10px;top:10px;width:30px;height:30px;border-radius:10px;background:rgba(15,23,42,.58);color:#fff;display:grid;place-items:center;font-size:14px;z-index:2}
+.thumb-time{position:absolute;right:10px;bottom:10px;z-index:2;background:rgba(17,24,39,.76);color:#fff;font-size:12px;padding:5px 8px;border-radius:999px;font-weight:700}
+.tone-strip{position:absolute;left:0;right:0;bottom:0;height:3px;z-index:2}
+.tone-strip.good{background:var(--tone-good)}
+.tone-strip.warn{background:var(--tone-warn)}
+.tone-strip.watch{background:var(--tone-watch)}
+.card h4{margin:0 0 8px;font-size:18px;line-height:1.45;letter-spacing:-0.04em;word-break:keep-all;color:#111827;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;transition:color .15s var(--ease)}
+.card:hover h4{color:var(--blue)}
+.card .author{font-size:13px;color:var(--muted)}
+
+@media(max-width:1180px){.hero{grid-template-columns:1fr}.cards-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:860px){.topbar{height:auto;padding:16px 0}.topbar-inner{flex-direction:column;align-items:flex-start}.nav{gap:16px}.hero-left{padding:28px 24px}.hero-title{font-size:38px}.hero-bottom,.sentiment-summary{grid-template-columns:1fr}.cards-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.section-bar-inner{flex-direction:column;align-items:flex-start}}
+@media(max-width:560px){.container{width:calc(100% - 24px)}.logo{font-size:34px}.hero-title{font-size:31px}.cards-grid{grid-template-columns:1fr}}
+
+/* ============== ADMIN ============== */
+.admin-shell{display:grid;grid-template-columns:240px 1fr;min-height:100vh;background:var(--bg)}
+.sidebar{background:#0b1220;color:#cbd5e1;padding:20px 14px;display:flex;flex-direction:column;gap:6px;position:sticky;top:0;height:100vh;border-right:1px solid #1f2937}
+.sidebar .logo{font-size:24px;padding:6px 8px 18px;border-bottom:1px solid #1f2937;margin-bottom:10px}
+.sidebar .logo .dabee{color:#fff}
+.sidebar a.menu{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;font-size:13.5px;font-weight:600;color:#cbd5e1;position:relative}
+.sidebar a.menu:hover{background:#111a2b;color:#fff}
+.sidebar a.menu.on{background:#111a2b;color:#fff}
+.sidebar a.menu.on::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2px;background:#7ec8ff;border-radius:2px}
+.sidebar .sp{flex:1}
+.sidebar .logout{color:#64748b;font:600 11px/1 var(--font-mono);letter-spacing:.14em;text-transform:uppercase;padding:10px 12px}
+
+.admin-main{padding:22px 28px 80px}
+.admin-top{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+.admin-top h1{margin:0;font-size:22px;letter-spacing:-0.03em;font-weight:800}
+.admin-top .crumbs{font:600 11px/1 var(--font-mono);color:var(--muted);letter-spacing:.14em;text-transform:uppercase}
+.admin-top .clock{margin-left:auto;display:inline-flex;align-items:center;gap:8px;font:600 12px/1 var(--font-mono);color:#0f172a;background:#fff;border:1px solid var(--line);padding:8px 12px;border-radius:999px}
+.admin-top .clock i{width:7px;height:7px;border-radius:50%;background:#dc2626;animation:pulseRed 1.4s var(--ease) infinite}
+
+.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.kpi .box{background:#fff;border:1px solid var(--line);border-radius:var(--r-md);padding:18px;box-shadow:var(--shadow-card)}
+.kpi .k{display:block;font:600 11px/1 var(--font-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.kpi .v{font-size:32px;font-weight:800;letter-spacing:-0.04em;line-height:1;color:#0f172a;font-variant-numeric:tabular-nums}
+.kpi .v small{font:600 12px/1 var(--font-mono);color:var(--tone-good);margin-left:8px;letter-spacing:.06em}
+.kpi .v.brand{color:var(--blue)}
+
+.adgrid{display:grid;grid-template-columns:2fr 1fr;gap:18px}
+@media(max-width:1100px){.kpi{grid-template-columns:repeat(2,1fr)}.adgrid{grid-template-columns:1fr}}
+.panel{background:#fff;border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-card);overflow:hidden}
+.panel .head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.panel .head h3{margin:0;font-size:15px;font-weight:800;letter-spacing:-0.02em}
+.panel .head .sub{font:600 10px/1 var(--font-mono);color:var(--muted);letter-spacing:.18em;text-transform:uppercase}
+.panel .body{padding:14px 18px}
+
+.console{background:#0b1220;color:#cbd5e1;border-radius:0}
+.console .head{background:#111a2b;border-bottom:1px solid #1f2937;color:#fff}
+.console .head h3{color:#fff}
+.console .head .sub{color:#94a3b8}
+.fchips{margin-left:auto;display:flex;gap:6px}
+.fchip{padding:5px 10px;border-radius:999px;border:1px solid #1f2937;font:700 10px/1 var(--font-mono);letter-spacing:.16em;text-transform:uppercase;color:#94a3b8;background:transparent}
+.fchip.on{color:#0b1220;background:#7ec8ff;border-color:#7ec8ff}
+.console .body{padding:14px 18px;height:380px;overflow:auto;font:500 12.5px/1.7 var(--font-mono);background:#070d1a}
+.log-line{display:grid;grid-template-columns:80px 56px 1fr;gap:12px;padding:1px 0}
+.log-line .t{color:#64748b}
+.log-line .lvl{letter-spacing:.16em;text-transform:uppercase}
+.log-line.info .lvl{color:#94a3b8}
+.log-line.warn .lvl{color:#fbbf24}
+.log-line.err .lvl{color:#f87171}
+.log-line .msg{color:#cbd5e1}
+.log-line.err .msg{color:#fecaca}
+
+.actions{display:flex;flex-direction:column;gap:8px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 14px;border:1px solid var(--line);border-radius:10px;background:#fff;color:#0f172a;font-size:13px;font-weight:700;transition:all .15s var(--ease);justify-content:flex-start}
+.btn:hover{border-color:#94a3b8;background:#f8fafc}
+.btn.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+.btn.primary:hover{filter:brightness(.95);background:var(--blue)}
+.btn.danger{color:var(--tone-warn);border-color:#fecaca}
+.btn.danger:hover{background:#fef2f2}
+
+.recent{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line);font:500 12px/1.8 var(--font-mono);color:var(--muted)}
+.recent .row{display:grid;grid-template-columns:48px 18px 1fr;gap:8px;align-items:baseline}
+.recent .ok{color:var(--tone-good);font-weight:800}
+.recent .ng{color:var(--tone-warn);font-weight:800}
+.recent b{color:#0f172a;font-weight:700}
+
+.bot-card{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:14px 18px;border-bottom:1px solid var(--line);background:#f8fafc}
+.bot-card .field label{display:block;font:600 10px/1 var(--font-mono);letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.bot-card .val{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-family:var(--font-mono);font-size:13px}
+.bot-card .status{display:inline-flex;align-items:center;gap:8px;font:700 12px/1 var(--font-mono);color:var(--tone-good)}
+.bot-card .status::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--tone-good);box-shadow:0 0 0 3px rgba(16,185,129,.18)}
+
+table.rcp{width:100%;border-collapse:collapse}
+.rcp th{text-align:left;font:700 10px/1 var(--font-mono);letter-spacing:.18em;text-transform:uppercase;color:var(--muted);padding:14px 18px;border-bottom:1px solid var(--line);background:#fff}
+.rcp td{padding:14px 18px;border-bottom:1px solid #f1f5f9;font-size:13.5px;color:#0f172a;vertical-align:middle;background:#fff}
+.rcp tr:hover td{background:#f8fafc}
+.rcp .on-dot,.rcp .off-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px}
+.rcp .on-dot{background:var(--tone-good)}
+.rcp .off-dot{background:#cbd5e1}
+.perm{display:inline-flex;gap:4px}
+.perm i{display:inline-flex;align-items:center;justify-content:center;width:30px;height:22px;border:1px solid var(--line);border-radius:4px;font:800 9px/1 var(--font-mono);color:var(--muted);font-style:normal;letter-spacing:.04em}
+.perm i.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+.row-actions{display:flex;gap:6px;visibility:hidden}
+.rcp tr:hover .row-actions{visibility:visible}
+.iconbtn{padding:6px 10px;border:1px solid var(--line);border-radius:6px;font-size:11px;background:#fff;color:#0f172a;font-weight:700}
+.iconbtn:hover{border-color:#94a3b8}
+.iconbtn.danger{color:var(--tone-warn);border-color:#fecaca}
+</style>
+</head>
+<body>
+
+<!-- ============== PUBLIC ============== -->
+<section class="view on" id="view-public">
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <div class="brand">
+        <h1 class="logo"><span class="dabee">DABEE</span><span class="run">RUN</span></h1>
+        <nav class="nav">
+          <a class="live" href="#">LIVE</a>
+          <a href="#">분야별 뉴스</a>
+          <a href="#">이슈</a>
+          <a href="#">리포트</a>
+        </nav>
+      </div>
+      <div class="icons">
+        <button class="icon-btn" aria-label="search">⌕</button>
+        <a class="icon-btn" href="#" onclick="setView('admin');return false;" aria-label="admin">☰</a>
+      </div>
+    </div>
+  </header>
+
+  <section class="hero-wrap">
+    <div class="container hero">
+      <div class="hero-left">
+        <div>
+          <div class="hero-kicker">
+            <span class="pill white">DABEE RUN 브리프</span>
+            <span class="pill positive">오늘의 톤: 우호적</span>
+          </div>
+          <h2 class="hero-title">
+            오늘의 하이닉스 여론은<br>
+            <span class="accent">긍정 흐름</span>이 우세합니다
+          </h2>
+          <p class="hero-desc">
+            HBM 기대감과 AI 메모리 수요 관련 보도가 우호 여론을 이끌고 있습니다. 반면 경쟁사 공급 확대 이슈는 단기 리스크로 분류됩니다.
+          </p>
+          <div class="hero-meta">
+            <span>핵심뉴스 12건</span><span>리스크 기사 3건</span><span>전일 대비 +8p</span><span>업데이트 09:30 KST</span>
+          </div>
+        </div>
+        <div class="hero-bottom">
+          <div class="mini-stat"><span>Sentiment Index</span><b class="tnum" data-score>72</b></div>
+          <div class="mini-stat"><span>우호 기사 비중</span><b>62%</b></div>
+          <div class="mini-stat"><span>비우호 기사 비중</span><b>18%</b></div>
+        </div>
+      </div>
+
+      <div class="hero-right">
+        <div class="trend-panel">
+          <div class="trend-head">
+            <div><h3>여론 추이</h3><p>최근 7일 기준 Sentiment Index 흐름</p></div>
+            <div class="index-chip"><span>Today</span><b class="tnum" data-score>72</b></div>
+          </div>
+          <svg class="chart" viewBox="0 0 520 160" preserveAspectRatio="none" aria-hidden="true">
+            <line x1="0" y1="20" x2="520" y2="20" stroke="#E5E7EB"/>
+            <line x1="0" y1="60" x2="520" y2="60" stroke="#E5E7EB"/>
+            <line x1="0" y1="100" x2="520" y2="100" stroke="#E5E7EB"/>
+            <line x1="0" y1="140" x2="520" y2="140" stroke="#E5E7EB"/>
+            <path id="trend-area" fill="url(#paint0_linear)" opacity="0.18"/>
+            <path id="trend-line" stroke="url(#paint1_linear)" stroke-width="4" stroke-linecap="round" fill="none"/>
+            <g id="trend-points"></g>
+            <g id="trend-labels"></g>
+            <defs>
+              <linearGradient id="paint0_linear" x1="20" y1="48" x2="500" y2="140" gradientUnits="userSpaceOnUse"><stop stop-color="#2563EB"/><stop offset="1" stop-color="#38BDF8"/></linearGradient>
+              <linearGradient id="paint1_linear" x1="20" y1="48" x2="500" y2="112" gradientUnits="userSpaceOnUse"><stop stop-color="#2563EB"/><stop offset="1" stop-color="#38BDF8"/></linearGradient>
+            </defs>
+          </svg>
+          <div class="trend-legend">
+            <span class="legend"><i class="dot" style="background:#2563eb"></i> Sentiment Index</span>
+            <span class="legend"><i class="dot" style="background:#10b981"></i> 우호 증가</span>
+          </div>
+        </div>
+
+        <div class="sentiment-summary">
+          <div class="summary-box positive"><span class="label">우호</span><div class="value">62%</div><div class="sub">HBM · AI 서버 · 실적 기대</div></div>
+          <div class="summary-box negative"><span class="label">비우호</span><div class="value">18%</div><div class="sub">경쟁사 증설 · 가격 변동성</div></div>
+          <div class="summary-box neutral"><span class="label">중립</span><div class="value">20%</div><div class="sub">시장 동향 · 일반 산업 기사</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-bar">
+    <div class="container section-bar-inner">
+      <div class="section-tabs">
+        <span class="active">핵심뉴스</span><span>우호 기사</span><span>비우호 기사</span>
+      </div>
+      <div class="section-date">2026년 5월 2일 토요일</div>
+    </div>
+  </section>
+
+  <main class="container cards-section">
+    <section class="cards-grid">
+      <article class="card"><div class="thumb g1"><span class="thumb-tier t1">TIER 1</span><div class="thumb-badge">↗</div><div class="thumb-time">14:01</div><div class="tone-strip good"></div></div><h4>HBM4 양산 발표에 외신 일제히 호평…AI 메모리 헤게모니 굳히기</h4><div class="author">Reuters · 경제팀</div></article>
+      <article class="card"><div class="thumb g2"><span class="thumb-tier t1">TIER 1</span><div class="thumb-badge">↗</div><div class="thumb-time">12:40</div><div class="tone-strip warn"></div></div><h4>대만 매체, "HBM 공급 차질 가능성"… 일부 고객사 대체 검토 보도</h4><div class="author">DigiTimes · 산업팀</div></article>
+      <article class="card"><div class="thumb g3"><span class="thumb-tier t2">TIER 2</span><div class="thumb-badge">↗</div><div class="thumb-time">13:12</div><div class="tone-strip good"></div></div><h4>JP모건, SK하이닉스 목표가 상향 — "메모리 슈퍼사이클 진입"</h4><div class="author">Bloomberg · 증권팀</div></article>
+      <article class="card"><div class="thumb g4"><span class="thumb-tier t2">TIER 2</span><div class="thumb-badge">↗</div><div class="thumb-time">13:48</div><div class="tone-strip watch"></div></div><h4>美 상무부, 메모리 반도체 보조금 가이드라인 공개</h4><div class="author">WSJ · 정책팀</div></article>
+      <article class="card"><div class="thumb g5"><span class="thumb-tier t2">TIER 2</span><div class="thumb-badge">↗</div><div class="thumb-time">11:55</div><div class="tone-strip watch"></div></div><h4>경쟁사, 차세대 HBM 로드맵 공개… 시장 점유율 경쟁 가속</h4><div class="author">EE Times · 글로벌팀</div></article>
+      <article class="card"><div class="thumb g6"><span class="thumb-tier t3">TIER 3</span><div class="thumb-badge">↗</div><div class="thumb-time">10:22</div><div class="tone-strip good"></div></div><h4>AI 서버 투자 확대 지속…HBM 핵심 수혜주로 거론되는 하이닉스</h4><div class="author">매일경제 · 테크팀</div></article>
+      <article class="card"><div class="thumb g7"><span class="thumb-tier t3">TIER 3</span><div class="thumb-badge">↗</div><div class="thumb-time">09:48</div><div class="tone-strip watch"></div></div><h4>메모리 가격 변동성 여전…시장선 "하반기 흐름 지켜봐야"</h4><div class="author">한국경제 · 시장팀</div></article>
+      <article class="card"><div class="thumb g8"><span class="thumb-tier t3">TIER 3</span><div class="thumb-badge">↗</div><div class="thumb-time">09:12</div><div class="tone-strip good"></div></div><h4>대형 고객사 수요 확대 전망…차세대 HBM 경쟁력 강조 기사 잇따라</h4><div class="author">Nikkei · 글로벌팀</div></article>
+    </section>
+  </main>
+</section>
+
+<!-- ============== ADMIN ============== -->
+<section class="view" id="view-admin">
+  <div class="admin-shell">
+    <aside class="sidebar">
+      <h1 class="logo"><span class="dabee">DABEE</span><span class="run">RUN</span></h1>
+      <a class="menu on" href="#">▣ Dashboard</a>
+      <a class="menu" href="#">⌕ Keywords</a>
+      <a class="menu" href="#">✉ Recipients</a>
+      <a class="menu" href="#">⚙ Settings</a>
+      <a class="menu" href="#">≡ Logs</a>
+      <span class="sp"></span>
+      <a class="logout" href="#" onclick="setView('public');return false;">⏻ View public site</a>
+    </aside>
+
+    <div class="admin-main">
+      <div class="admin-top">
+        <h1>Operations Console</h1>
+        <span class="crumbs">/ Admin / Dashboard</span>
+        <span class="clock"><i></i><span id="clock">14:02:15 KST</span></span>
+      </div>
+
+      <div class="kpi">
+        <div class="box"><span class="k">Ingest · 24h</span><span class="v tnum">142</span></div>
+        <div class="box"><span class="k">Tier 1 · 24h</span><span class="v tnum">6</span></div>
+        <div class="box"><span class="k">Delivery · 24h</span><span class="v tnum">127 <small>/ 0 fail</small></span></div>
+        <div class="box"><span class="k">Scheduler</span><span class="v brand">idle</span></div>
+      </div>
+
+      <div class="adgrid">
+        <!-- LEFT: console + recipients -->
+        <div>
+          <div class="panel console">
+            <div class="head">
+              <h3>● Live Log</h3><span class="sub">ws://logs</span>
+              <div class="fchips">
+                <button class="fchip on">All</button><button class="fchip">Info</button><button class="fchip">Warn</button><button class="fchip">Error</button>
+              </div>
+            </div>
+            <div class="body" id="logbody"></div>
+          </div>
+
+          <div class="panel" style="margin-top:18px">
+            <div class="head">
+              <h3>Recipients · Telegram</h3><span class="sub">CRUD</span>
+              <div style="margin-left:auto"><button class="btn primary">+ Add Recipient</button></div>
+            </div>
+            <div class="bot-card">
+              <div class="field">
+                <label>Bot Token</label>
+                <div class="val">●●●●●●●●●●●●●●●●●●●●<button class="iconbtn" style="margin-left:auto">Reveal</button><button class="iconbtn">Verify</button></div>
+              </div>
+              <div class="field">
+                <label>Status</label>
+                <div class="val"><span class="status">Connected · @dabee_run_bot</span></div>
+              </div>
+            </div>
+            <table class="rcp">
+              <thead><tr><th>State</th><th>Name</th><th>chat_id</th><th>Permissions</th><th>Last sent</th><th></th></tr></thead>
+              <tbody>
+                <tr><td><span class="on-dot"></span>active</td><td><b>김OO 부사장</b><div style="color:var(--muted);font-size:11px;margin-top:2px">PR · Executive</div></td><td class="mono">7234XXXXXX</td><td><div class="perm"><i class="on">T1</i><i class="on">T2</i><i>T3</i><i class="on">DR</i></div></td><td class="mono" style="color:var(--muted)">13:58</td><td><div class="row-actions"><button class="iconbtn">Test</button><button class="iconbtn">Edit</button><button class="iconbtn danger">Del</button></div></td></tr>
+                <tr><td><span class="on-dot"></span>active</td><td><b>PR팀 단톡</b><div style="color:var(--muted);font-size:11px;margin-top:2px">Group</div></td><td class="mono">7891XXXXXX</td><td><div class="perm"><i class="on">T1</i><i class="on">T2</i><i class="on">T3</i><i class="on">DR</i></div></td><td class="mono" style="color:var(--muted)">13:58</td><td><div class="row-actions"><button class="iconbtn">Test</button><button class="iconbtn">Edit</button><button class="iconbtn danger">Del</button></div></td></tr>
+                <tr><td><span class="off-dot"></span>paused</td><td><b>임시 채널</b><div style="color:var(--muted);font-size:11px;margin-top:2px">Test</div></td><td class="mono">1003XXXXXX</td><td><div class="perm"><i>T1</i><i>T2</i><i>T3</i><i>DR</i></div></td><td class="mono" style="color:var(--muted)">—</td><td><div class="row-actions"><button class="iconbtn">Test</button><button class="iconbtn">Edit</button><button class="iconbtn danger">Del</button></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- RIGHT: actions + sentiment -->
+        <div>
+          <div class="panel">
+            <div class="head"><h3>Actions</h3><span class="sub">scheduler</span></div>
+            <div class="body actions">
+              <button class="btn primary">▶ Trigger pipeline now</button>
+              <button class="btn">▶ Start scheduler</button>
+              <button class="btn danger">⏸ Stop scheduler</button>
+              <button class="btn">⤓ Download today's log</button>
+              <div class="recent">
+                <div style="font:700 10px/1 var(--font-mono);letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Recent Sends</div>
+                <div class="row"><span>13:58</span><span class="ok">✓</span><span>14 recipients · <b>TIER1 HBM4 양산</b></span></div>
+                <div class="row"><span>13:01</span><span class="ok">✓</span><span>14 recipients · <b>TIER1 美 상무부…</b></span></div>
+                <div class="row"><span>12:30</span><span class="ng">✗</span><span>1 fail · 7891… (429 retry)</span></div>
+                <div class="row"><span>11:48</span><span class="ok">✓</span><span>14 recipients · <b>TIER2 JP모건…</b></span></div>
+                <div class="row"><span>10:22</span><span class="ok">✓</span><span>14 recipients · <b>DAILY REPORT</b></span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-top:18px">
+            <div class="head"><h3>Sentiment · Live</h3><span class="sub">24h</span></div>
+            <div class="body" style="display:grid;gap:12px">
+              <div style="display:flex;align-items:flex-end;gap:8px"><span class="tnum" style="font-size:56px;font-weight:800;letter-spacing:-0.05em;line-height:1">72</span><span class="mono" style="color:var(--muted);padding-bottom:8px">/ 100</span></div>
+              <span style="display:inline-flex;align-items:center;gap:8px;font:700 11px/1 var(--font-mono);letter-spacing:.18em;text-transform:uppercase;color:var(--tone-watch);background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);padding:6px 10px;border-radius:999px;width:fit-content">● Watchful</span>
+              <span style="font:700 12px/1 var(--font-mono);color:var(--tone-good)">▲ +6 vs 어제</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- toggle -->
+<div class="viewbar">
+  <button id="b-public" class="on" onclick="setView('public')">Public</button>
+  <button id="b-admin" onclick="setView('admin')">Admin</button>
+</div>
+
+<script>
+function setView(v){
+  document.getElementById('view-public').classList.toggle('on', v==='public');
+  document.getElementById('view-admin').classList.toggle('on', v==='admin');
+  document.getElementById('b-public').classList.toggle('on', v==='public');
+  document.getElementById('b-admin').classList.toggle('on', v==='admin');
+  window.scrollTo({top:0});
+}
+
+// trend chart
+(function(){
+  const svg = document.querySelector('.chart'); if(!svg) return;
+  const data = [
+    {date:'4/26', score:46},{date:'4/27', score:52},{date:'4/28', score:58},
+    {date:'4/29', score:60},{date:'4/30', score:64},{date:'5/01', score:68},{date:'5/02', score:72},
+  ];
+  const W=520, H=160, padX=20, padY=20;
+  const xs = i => padX + (i*(W-padX*2)/(data.length-1));
+  const ys = v => padY + (1 - v/100) * (H - padY*2);
+  const pts = data.map((d,i)=>[xs(i), ys(d.score)]);
+  let d = `M ${pts[0][0]} ${pts[0][1]}`;
+  for (let i=0;i<pts.length-1;i++){
+    const [x0,y0]=pts[i], [x1,y1]=pts[i+1];
+    const cx=(x0+x1)/2;
+    d += ` C ${cx} ${y0}, ${cx} ${y1}, ${x1} ${y1}`;
+  }
+  svg.querySelector('#trend-line').setAttribute('d', d);
+  svg.querySelector('#trend-area').setAttribute('d', d + ` L ${pts.at(-1)[0]} ${H-padY} L ${pts[0][0]} ${H-padY} Z`);
+
+  const gp = svg.querySelector('#trend-points');
+  const gl = svg.querySelector('#trend-labels');
+  pts.forEach(([x,y], i) => {
+    const last = i===pts.length-1;
+    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r', last?6:5);
+    c.setAttribute('fill', last?'#38BDF8':'#2563EB');
+    gp.appendChild(c);
+    const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x', x-14); t.setAttribute('y', H-4);
+    t.setAttribute('font-size','11'); t.setAttribute('fill','#6B7280');
+    t.textContent = data[i].date;
+    gl.appendChild(t);
+  });
+})();
+
+// count up
+document.querySelectorAll('[data-score]').forEach(el=>{
+  const target = parseInt(el.textContent||'0',10); if(isNaN(target)) return;
+  el.textContent = '0'; const start = performance.now(), dur = 800;
+  const step = now => {
+    const p = Math.min(1,(now-start)/dur);
+    el.textContent = Math.round(target*(1-Math.pow(1-p,3)));
+    if(p<1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+});
+
+// admin clock
+function tick(){
+  const d=new Date(), p=n=>String(n).padStart(2,'0');
+  const t = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())} KST`;
+  const el = document.getElementById('clock'); if(el) el.textContent = t;
+}
+setInterval(tick,1000); tick();
+
+// admin live log
+(function(){
+  const body = document.getElementById('logbody'); if(!body) return;
+  const seed = [
+    ['14:02:15','info','pipeline started · run_id=20260503-1402'],
+    ['14:02:16','info','naver_api: query="SK하이닉스" theme=competitor fetched=12'],
+    ['14:02:17','info','naver_api: query="HBM4" theme=hbm fetched=8'],
+    ['14:02:18','info','relevance: 20 articles → 14 passed'],
+    ['14:02:19','info','crawler: fetched 14 / failed 0'],
+    ['14:02:21','warn','press_resolver: unknown press domain "tw-news.example" → fallback'],
+    ['14:02:22','info','summarizer(gemini): 14 summaries · avg 318ms'],
+    ['14:02:23','info','tone_analyzer: 14 scored · good=9 watch=3 warn=2'],
+    ['14:02:24','err' ,'telegram_sender: 429 too many requests · retrying in 8s · chat=7891XXXXXX'],
+    ['14:02:32','info','telegram_sender: retry ok · chat=7891XXXXXX'],
+    ['14:02:33','info','delivered: 14 articles → 14 recipients · 100%'],
+    ['14:02:34','info','daily_report: skipped (next at 18:00 KST)'],
+    ['14:02:35','info','pipeline finished · 20.3s · scheduler=idle'],
+  ];
+  body.innerHTML = seed.map(([t,l,m])=>`<div class="log-line ${l}"><span class="t">${t}</span><span class="lvl">${l}</span><span class="msg">${m}</span></div>`).join('');
+  body.scrollTop = body.scrollHeight;
+  let i=0; const more=[
+    ['info','ws_manager: client connected · total=2'],
+    ['info','health: db=ok scheduler=idle uptime=3h12m'],
+    ['warn','recipient_filter: chat_id=1003XXXXXX disabled, skipping'],
+    ['info','heartbeat · ok'],
+  ];
+  setInterval(()=>{
+    const d=new Date(), p=n=>String(n).padStart(2,'0');
+    const t=`${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    const [l,m]=more[i++ % more.length];
+    const div=document.createElement('div'); div.className=`log-line ${l}`;
+    div.innerHTML=`<span class="t">${t}</span><span class="lvl">${l}</span><span class="msg">${m}</span>`;
+    body.appendChild(div); body.scrollTop=body.scrollHeight;
+  },3500);
+})();
+</script>
+</body>
+</html>

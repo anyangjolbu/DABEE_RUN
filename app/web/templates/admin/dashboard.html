@@ -1,102 +1,323 @@
 {% extends "admin/base_admin.html" %}
-{% block title %}대시보드{% endblock %}
+{% set active = "dashboard" %}
+{% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <h1 class="page-title">관리자 대시보드</h1>
-  <div class="status-pill" id="statusPill">
-    <span class="dot"></span>
-    <span class="label">연결 중...</span>
+
+<div class="admin-top">
+  <h1>Operations Console</h1>
+  <span class="admin-crumbs">/ Admin / Dashboard</span>
+  <span class="admin-clock"><i></i><span id="clock">--:--:-- KST</span></span>
+</div>
+
+<!-- KPI row -->
+<div class="kpi">
+  <div class="kpi-box">
+    <span class="kpi-key">Ingest · 24h</span>
+    <span class="kpi-val tnum" id="kpiArticles">—</span>
+  </div>
+  <div class="kpi-box">
+    <span class="kpi-key">Tier 1 · 24h</span>
+    <span class="kpi-val tnum" id="kpiTier1">—</span>
+  </div>
+  <div class="kpi-box">
+    <span class="kpi-key">Recipients</span>
+    <span class="kpi-val tnum" id="kpiRecipients">—</span>
+  </div>
+  <div class="kpi-box">
+    <span class="kpi-key">Scheduler</span>
+    <span class="kpi-val brand" id="kpiScheduler">idle</span>
   </div>
 </div>
 
-<div class="card-grid-3">
-  <div class="card">
-    <div class="card-title">총 수집 기사</div>
-    <div class="metric-value" id="statArticles">-</div>
+<!-- Main grid -->
+<div class="adgrid">
+
+  <!-- LEFT -->
+  <div>
+    <!-- Live log console -->
+    <div class="panel console-panel">
+      <div class="panel-head">
+        <h3>● Live Log</h3>
+        <span class="sub">ws://logs</span>
+        <div class="log-filters">
+          <button class="log-filter-btn on" data-level="">All</button>
+          <button class="log-filter-btn" data-level="info">Info</button>
+          <button class="log-filter-btn" data-level="warn">Warn</button>
+          <button class="log-filter-btn" data-level="err">Error</button>
+        </div>
+      </div>
+      <div class="log-box" id="logBox"></div>
+    </div>
+
+    <!-- Recipients panel -->
+    <div class="panel" style="margin-top:18px">
+      <div class="panel-head">
+        <h3>Recipients · Telegram</h3>
+        <span class="sub">CRUD</span>
+        <div class="ml-auto">
+          <button class="btn btn-primary btn-sm" id="addRecipientBtn">+ 수신자 추가</button>
+        </div>
+      </div>
+      <div class="bot-card">
+        <div>
+          <label>Bot Token</label>
+          <div class="bot-val mono">●●●●●●●●●●●●●●●●●●●●</div>
+        </div>
+        <div>
+          <label>Status</label>
+          <div class="bot-val"><span class="bot-status">Connected</span></div>
+        </div>
+      </div>
+      <table class="rcp" id="recipientTable">
+        <thead>
+          <tr>
+            <th>State</th>
+            <th>Name</th>
+            <th>chat_id</th>
+            <th>Permissions</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="recipientBody">
+          <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px;">로딩 중...</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
-  <div class="card">
-    <div class="card-title">등록 수신자</div>
-    <div class="metric-value" id="statRecipients">-</div>
+
+  <!-- RIGHT -->
+  <div>
+    <!-- Actions -->
+    <div class="panel">
+      <div class="panel-head"><h3>Actions</h3><span class="sub">scheduler</span></div>
+      <div class="panel-body actions">
+        <button class="btn btn-primary" id="btnTrigger">▶ Trigger pipeline now</button>
+        <button class="btn" id="btnStart">▶ Start scheduler</button>
+        <button class="btn btn-danger" id="btnStop">⏸ Stop scheduler</button>
+        <div class="recent" id="recentSends" style="display:none">
+          <div class="r-head">Recent Activity</div>
+        </div>
+        <div id="ctrlResult" style="font:600 12px/1 var(--font-mono);color:var(--muted);min-height:18px;"></div>
+      </div>
+    </div>
+
+    <!-- Sentiment -->
+    <div class="panel" style="margin-top:18px">
+      <div class="panel-head"><h3>Sentiment · Live</h3><span class="sub">today</span></div>
+      <div class="panel-body">
+        <div class="sentiment-score-wrap">
+          <span class="score-num" id="sentScore">—</span>
+          <span class="score-denom">/ 100</span>
+        </div>
+        <span class="sentiment-badge watch" id="sentBadge">● Analyzing</span>
+        <div class="sentiment-delta" id="sentDelta"></div>
+      </div>
+    </div>
   </div>
-  <div class="card">
-    <div class="card-title">스케줄러</div>
-    <div class="metric-value" id="schedPhase">-</div>
-    <div class="last-result" id="schedNext">다음 실행: —</div>
+
+</div>
+
+<!-- Add recipient modal -->
+<div class="modal-backdrop hidden" id="addModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>수신자 추가</h3>
+      <button class="modal-close" id="modalClose">✕</button>
+    </div>
+    <form id="addForm">
+      <div class="form-field">
+        <label>이름</label>
+        <input type="text" class="input-field" name="name" placeholder="홍길동 / PR팀 단톡" required />
+      </div>
+      <div class="form-field">
+        <label>Telegram Chat ID</label>
+        <input type="text" class="input-field mono" name="chat_id" placeholder="123456789" required />
+      </div>
+      <div class="form-field">
+        <label>수신 권한</label>
+        <div class="perm-grid">
+          <label class="perm-item"><input type="checkbox" name="receive_tier1" checked /> TIER 1 알림</label>
+          <label class="perm-item"><input type="checkbox" name="receive_tier2" checked /> TIER 2 알림</label>
+          <label class="perm-item"><input type="checkbox" name="receive_tier3" /> TIER 3 알림</label>
+          <label class="perm-item"><input type="checkbox" name="receive_daily_report" checked /> 일간 리포트</label>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-full">추가하기</button>
+    </form>
   </div>
 </div>
 
-<div class="card">
-  <div class="card-title">파이프라인 제어</div>
-  <div class="button-row" style="margin-bottom: var(--space-3);">
-    <button class="btn btn-primary" id="btnTrigger">지금 실행</button>
-    <button class="btn btn-secondary" id="btnStart">스케줄러 시작</button>
-    <button class="btn btn-secondary" id="btnStop">스케줄러 정지</button>
-  </div>
-  <div class="last-result" id="ctrlResult"></div>
-</div>
-
-<div class="card">
-  <div class="card-title">실시간 로그</div>
-  <div class="log-box" id="logBox"></div>
-</div>
 {% endblock %}
 
 {% block scripts %}
 <script src="/static/js/common.js"></script>
 <script>
 (function () {
-  const phaseEl  = document.getElementById('schedPhase');
-  const nextEl   = document.getElementById('schedNext');
-  const logBox   = document.getElementById('logBox');
-  const ctrlEl   = document.getElementById('ctrlResult');
+  // ── Clock ───────────────────────────────────────────────
+  function tick() {
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    document.getElementById('clock').textContent =
+      `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())} KST`;
+  }
+  setInterval(tick, 1000); tick();
 
-  const phaseLabel = (p) => ({ idle: '대기', running: '실행 중', stopped: '정지' }[p] || p);
-
-  function renderScheduler(s) {
-    if (!s) return;
-    phaseEl.textContent = phaseLabel(s.phase);
-    if (s.next_in_sec != null) {
-      const m = Math.floor(s.next_in_sec / 60);
-      const sec = s.next_in_sec % 60;
-      nextEl.textContent = `다음 실행: ${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
-    } else {
-      nextEl.textContent = '다음 실행: —';
-    }
+  // ── Log filter ──────────────────────────────────────────
+  let logFilter = '';
+  document.querySelectorAll('.log-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.log-filter-btn').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      logFilter = btn.dataset.level;
+      applyLogFilter();
+    });
+  });
+  function applyLogFilter() {
+    document.querySelectorAll('#logBox .log-line').forEach(el => {
+      el.style.display = (!logFilter || el.classList.contains(logFilter)) ? '' : 'none';
+    });
   }
 
-  window.addEventListener('dabee:scheduler', (e) => renderScheduler(e.detail.data));
-
-  fetch('/api/scheduler').then(r => r.json()).then(renderScheduler);
-
-  window.addEventListener('dabee:log', (e) => {
-    const line = document.createElement('div');
-    line.className = `level-${e.detail.level}`;
-    line.textContent = e.detail.message;
-    logBox.appendChild(line);
+  // ── Live log ────────────────────────────────────────────
+  const logBox = document.getElementById('logBox');
+  function addLog(time, level, msg) {
+    const div = document.createElement('div');
+    div.className = `log-line ${level}`;
+    div.innerHTML = `<span class="lt">${time}</span><span class="lvl">${level}</span><span class="msg">${escHtml(msg)}</span>`;
+    if (logFilter && !div.classList.contains(logFilter)) div.style.display = 'none';
+    logBox.appendChild(div);
     while (logBox.childElementCount > 500) logBox.removeChild(logBox.firstChild);
     logBox.scrollTop = logBox.scrollHeight;
+  }
+  function nowTime() {
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+  window.addEventListener('dabee:log', (e) => {
+    const level = { INFO: 'info', WARNING: 'warn', ERROR: 'err' }[e.detail.level] || 'info';
+    addLog(nowTime(), level, e.detail.message);
   });
 
-  // 통계
+  // ── Scheduler ───────────────────────────────────────────
+  const kpiSched = document.getElementById('kpiScheduler');
+  function renderScheduler(s) {
+    if (!s) return;
+    const labels = { idle: 'idle', running: 'running', stopped: 'stopped' };
+    kpiSched.textContent = labels[s.phase] || s.phase;
+  }
+  window.addEventListener('dabee:scheduler', (e) => renderScheduler(e.detail.data));
+  fetch('/api/scheduler').then(r => r.json()).then(renderScheduler);
+
+  // ── KPI stats ───────────────────────────────────────────
   fetch('/api/articles?limit=1').then(r => r.json()).then(d => {
-    document.getElementById('statArticles').textContent = d.total ?? '-';
+    document.getElementById('kpiArticles').textContent = d.total ?? '—';
   });
+  fetch('/api/articles?limit=200&tier=1').then(r => r.json()).then(d => {
+    document.getElementById('kpiTier1').textContent = d.total ?? '—';
+  }).catch(() => {});
   adminFetch('/api/admin/recipients').then(r => r.json()).then(d => {
-    document.getElementById('statRecipients').textContent = Array.isArray(d) ? d.length : '-';
+    document.getElementById('kpiRecipients').textContent = Array.isArray(d) ? d.length : '—';
   });
 
-  // 제어 버튼
+  // Sentiment from articles
+  fetch('/api/articles?limit=100').then(r => r.json()).then(d => {
+    const items = d.items || [];
+    if (!items.length) return;
+    let good = 0, warn = 0, neut = 0;
+    items.forEach(a => {
+      if (a.tone_level === '양호') good++;
+      else if (a.tone_level === '경고') warn++;
+      else neut++;
+    });
+    const total = items.length;
+    const score = Math.round((good + 0.5 * neut) / total * 100);
+    document.getElementById('sentScore').textContent = score;
+    const badge = document.getElementById('sentBadge');
+    badge.textContent = score >= 60 ? '● Good' : score >= 40 ? '● Watchful' : '● Alert';
+    badge.className = 'sentiment-badge ' + (score >= 60 ? 'good' : score >= 40 ? 'watch' : 'warn');
+  });
+
+  // ── Pipeline control ────────────────────────────────────
+  const ctrlEl = document.getElementById('ctrlResult');
   async function ctrl(path, label) {
     ctrlEl.textContent = `${label} 요청 중...`;
     const res = await adminFetch(path, { method: 'POST' });
-    ctrlEl.textContent = res.ok ? `${label} 완료` : `오류 발생`;
+    ctrlEl.textContent = res.ok ? `${label} 완료` : '오류 발생';
     fetch('/api/scheduler').then(r => r.json()).then(renderScheduler);
   }
-
   document.getElementById('btnTrigger').addEventListener('click', () => ctrl('/api/admin/scheduler/trigger', '즉시 실행'));
   document.getElementById('btnStart').addEventListener('click',   () => ctrl('/api/admin/scheduler/start',   '시작'));
   document.getElementById('btnStop').addEventListener('click',    () => ctrl('/api/admin/scheduler/stop',    '정지'));
+
+  // ── Recipients table ────────────────────────────────────
+  function escHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+  function renderRecipients(list) {
+    const tbody = document.getElementById('recipientBody');
+    if (!list.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px;">수신자가 없습니다.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = list.map(r => `
+      <tr>
+        <td><span class="${r.enabled ? 'on-dot' : 'off-dot'}"></span>${r.enabled ? 'active' : 'paused'}</td>
+        <td><b>${escHtml(r.name)}</b></td>
+        <td class="mono" style="color:var(--muted)">${escHtml(String(r.chat_id))}</td>
+        <td><div class="perm">
+          <i class="${r.receive_tier1 ? 'on' : ''}">T1</i>
+          <i class="${r.receive_tier2 ? 'on' : ''}">T2</i>
+          <i class="${r.receive_tier3 ? 'on' : ''}">T3</i>
+          <i class="${r.receive_daily_report ? 'on' : ''}">DR</i>
+        </div></td>
+        <td><div class="row-actions">
+          <button class="iconbtn danger" onclick="deleteRecipient(${r.id})">Del</button>
+        </div></td>
+      </tr>
+    `).join('');
+  }
+  function loadRecipients() {
+    adminFetch('/api/admin/recipients').then(r => r.json()).then(renderRecipients).catch(() => {});
+  }
+  loadRecipients();
+
+  window.deleteRecipient = async function(id) {
+    if (!confirm('삭제하시겠습니까?')) return;
+    await adminFetch(`/api/admin/recipients/${id}`, { method: 'DELETE' });
+    loadRecipients();
+    document.getElementById('kpiRecipients').textContent = '—';
+    adminFetch('/api/admin/recipients').then(r => r.json()).then(d => {
+      document.getElementById('kpiRecipients').textContent = Array.isArray(d) ? d.length : '—';
+    });
+  };
+
+  // ── Add recipient modal ─────────────────────────────────
+  const modal = document.getElementById('addModal');
+  document.getElementById('addRecipientBtn').addEventListener('click', () => modal.classList.remove('hidden'));
+  document.getElementById('modalClose').addEventListener('click', () => modal.classList.add('hidden'));
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+
+  document.getElementById('addForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const body = {
+      name: fd.get('name'),
+      chat_id: parseInt(fd.get('chat_id'), 10),
+      receive_tier1: fd.has('receive_tier1'),
+      receive_tier2: fd.has('receive_tier2'),
+      receive_tier3: fd.has('receive_tier3'),
+      receive_daily_report: fd.has('receive_daily_report'),
+    };
+    const res = await adminFetch('/api/admin/recipients', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (res.ok) {
+      modal.classList.add('hidden');
+      e.target.reset();
+      loadRecipients();
+      toast('수신자가 추가되었습니다.');
+    } else {
+      toast('추가 실패', 'err');
+    }
+  });
 })();
 </script>
 {% endblock %}

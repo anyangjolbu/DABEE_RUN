@@ -7,24 +7,25 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/css/tokens.css" />
 </head>
 <body class="login-body">
   <div class="login-wrap">
-    <div class="login-brand">
-      <span class="brand-name">DABEE</span><span class="brand-suffix">Run</span>
+    <div class="login-logo">
+      <span class="dabee">DABEE</span><span class="run">RUN</span>
     </div>
-    <p class="login-sub">관리자 전용 영역</p>
+    <p class="login-sub">Admin Access Only</p>
     <form class="login-form" id="loginForm">
       <input
-        type="password" id="pwInput" class="input-field"
+        type="password" id="pwInput" class="login-input"
         placeholder="비밀번호" autocomplete="current-password"
         autofocus
       />
-      <div class="error-msg" id="loginError"></div>
-      <button type="submit" class="btn btn-primary btn-full">로그인</button>
+      <div class="login-error" id="loginError"></div>
+      <button type="submit" class="login-btn">로그인</button>
     </form>
-    <a href="/" class="back-link">← 공개 대시보드로</a>
+    <a href="/" class="login-back">← 공개 대시보드</a>
   </div>
 
   <script>
@@ -36,7 +37,6 @@
       errEl.textContent = '';
       btn.disabled = true;
       btn.textContent = '로그인 중...';
-
       try {
         const res = await fetch('/api/admin/login', {
           method: 'POST',
@@ -47,7 +47,7 @@
           location.href = '/admin';
         } else {
           const data = await res.json().catch(() => ({}));
-          errEl.textContent = data.detail || '로그인 실패';
+          errEl.textContent = data.detail || '비밀번호가 올바르지 않습니다';
           btn.disabled = false;
           btn.textContent = '로그인';
         }

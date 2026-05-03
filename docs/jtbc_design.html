@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DABEE RUN - JTBC style newsroom</title>
+
+  <style>
+    @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css");
+
+    :root{
+      --bg:#f4f5f7;
+      --jtbc-blue:#043A66;
+      --blue:#2563eb;
+      --sky:#38bdf8;
+      --green:#10b981;
+      --red:#ef4444;
+      --gray:#94a3b8;
+      --text:#111827;
+      --muted:#6b7280;
+      --line:#e5e7eb;
+      --white:#ffffff;
+    }
+
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0}
+    body{
+      font-family:"Pretendard", Inter, sans-serif;
+      background:var(--bg);
+      color:var(--text);
+    }
+
+    .container{
+      width:min(1400px, calc(100% - 40px));
+      margin:0 auto;
+    }
+
+    .topbar{
+      height:78px;
+      background:#fff;
+      border-bottom:1px solid var(--line);
+    }
+
+    .topbar-inner{
+      height:100%;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:24px;
+    }
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:18px;
+      min-width:0;
+      flex-wrap:wrap;
+    }
+
+    .logo{
+      margin:0;
+      display:flex;
+      align-items:flex-end;
+      gap:8px;
+      font-family:"Pretendard", sans-serif;
+      font-size:40px;
+      line-height:.9;
+      letter-spacing:-0.075em;
+      font-weight:900;
+      white-space:nowrap;
+    }
+
+    .logo .dabee{
+      color:#0f172a;
+    }
+
+    .logo .run{
+      transition:.2s ease;
+    }
+
+    body.run-gradient .logo .run{
+      color:transparent;
+      background:linear-gradient(135deg, #043A66 0%, #075487 58%, #0A6EA3 100%);
+      -webkit-background-clip:text;
+      background-clip:text;
+    }
+
+    body.run-deep .logo .run{
+      color:#043A66;
+      background:none;
+    }
+
+    body.run-blacknavy .logo .run{
+      color:#07111f;
+      background:none;
+    }
+
+    .nav{
+      display:flex;
+      align-items:center;
+      gap:28px;
+      color:#374151;
+      font-size:16px;
+      font-weight:700;
+      flex-wrap:wrap;
+    }
+
+    .nav .live{
+      color:#dc2626;
+      position:relative;
+      padding-left:16px;
+    }
+
+    .nav .live::before{
+      content:"";
+      width:8px;
+      height:8px;
+      border-radius:50%;
+      background:#dc2626;
+      position:absolute;
+      left:0;
+      top:50%;
+      transform:translateY(-50%);
+    }
+
+    .icons{
+      display:flex;
+      gap:14px;
+      color:#374151;
+      font-size:22px;
+      align-items:center;
+    }
+
+    .icon-btn{
+      width:36px;
+      height:36px;
+      border-radius:999px;
+      display:grid;
+      place-items:center;
+    }
+
+    .run-preview-bar{
+      background:#fff;
+      border-bottom:1px solid var(--line);
+    }
+
+    .run-preview-inner{
+      padding:14px 0;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      flex-wrap:wrap;
+    }
+
+    .run-preview-inner strong{
+      font-size:14px;
+      letter-spacing:-.02em;
+      color:#111827;
+    }
+
+    .run-buttons{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+
+    .run-btn{
+      border:1px solid #d8dee8;
+      background:#fff;
+      color:#334155;
+      border-radius:999px;
+      padding:8px 12px;
+      font-size:12px;
+      font-weight:800;
+      cursor:pointer;
+    }
+
+    .run-btn.active{
+      background:#043A66;
+      border-color:#043A66;
+      color:#fff;
+    }
+
+    .hero-wrap{
+      background:#fff;
+      border-bottom:1px solid var(--line);
+    }
+
+    .hero{
+      display:grid;
+      grid-template-columns:1.1fr 1fr;
+      min-height:360px;
+    }
+
+    .hero-left{
+      background:#043A66;
+      color:#fff;
+      padding:42px 46px;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+    }
+
+    .hero-kicker{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-bottom:10px;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      padding:8px 12px;
+      border-radius:999px;
+      font-size:12px;
+      font-weight:800;
+      white-space:nowrap;
+    }
+
+    .pill.white{
+      background:rgba(255,255,255,.14);
+      border:1px solid rgba(255,255,255,.18);
+      color:#fff;
+    }
+
+    .pill.positive{
+      background:rgba(255,255,255,.10);
+      border:1px solid rgba(255,255,255,.18);
+      color:#d9efff;
+    }
+
+    .hero-title{
+      margin:0;
+      font-family:"Pretendard", sans-serif;
+      font-size:52px;
+      line-height:1.02;
+      letter-spacing:-0.07em;
+      font-weight:800;
+      word-break:keep-all;
+      color:#ffffff;
+    }
+
+    .hero-title .accent{
+      color:#cfe8ff;
+    }
+
+    .hero-desc{
+      margin:16px 0 0;
+      color:rgba(255,255,255,.84);
+      font-size:18px;
+      line-height:1.7;
+      max-width:760px;
+      word-break:keep-all;
+    }
+
+    .hero-meta{
+      display:flex;
+      gap:18px;
+      flex-wrap:wrap;
+      margin-top:22px;
+      color:rgba(255,255,255,.76);
+      font-size:14px;
+      font-weight:600;
+    }
+
+    .hero-bottom{
+      margin-top:28px;
+      display:grid;
+      grid-template-columns:repeat(3, minmax(0, 1fr));
+      gap:12px;
+    }
+
+    .mini-stat{
+      background:rgba(255,255,255,.08);
+      border:1px solid rgba(255,255,255,.14);
+      border-radius:16px;
+      padding:14px;
+    }
+
+    .mini-stat span{
+      display:block;
+      color:rgba(255,255,255,.70);
+      font-size:12px;
+      margin-bottom:6px;
+    }
+
+    .mini-stat b{
+      display:block;
+      font-size:30px;
+      line-height:1;
+      letter-spacing:-0.06em;
+      color:#ffffff;
+    }
+
+    .hero-right{
+      background:#eaf2fa;
+      padding:28px;
+      display:grid;
+      gap:18px;
+      align-content:center;
+    }
+
+    .trend-panel{
+      background:#fff;
+      border-radius:22px;
+      padding:22px;
+      border:1px solid rgba(15,23,42,.06);
+      box-shadow:0 14px 30px rgba(15,23,42,.06);
+    }
+
+    .trend-head{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:16px;
+    }
+
+    .trend-head h3{
+      margin:0;
+      font-size:22px;
+      letter-spacing:-0.04em;
+    }
+
+    .trend-head p{
+      margin:6px 0 0;
+      font-size:13px;
+      color:var(--muted);
+    }
+
+    .index-chip{
+      min-width:90px;
+      text-align:right;
+    }
+
+    .index-chip span{
+      display:block;
+      color:var(--muted);
+      font-size:12px;
+      margin-bottom:2px;
+    }
+
+    .index-chip b{
+      font-size:34px;
+      line-height:1;
+      letter-spacing:-0.07em;
+      color:#0f172a;
+    }
+
+    .chart{
+      width:100%;
+      height:160px;
+      display:block;
+    }
+
+    .sentiment-summary{
+      display:grid;
+      grid-template-columns:1fr 1fr 1fr;
+      gap:12px;
+    }
+
+    .summary-box{
+      background:#fff;
+      border:1px solid rgba(15,23,42,.06);
+      border-radius:18px;
+      padding:16px;
+      box-shadow:0 12px 24px rgba(15,23,42,.04);
+    }
+
+    .summary-box .label{
+      font-size:12px;
+      color:var(--muted);
+      margin-bottom:8px;
+      display:block;
+    }
+
+    .summary-box .value{
+      font-size:26px;
+      font-weight:800;
+      letter-spacing:-0.05em;
+      line-height:1;
+      margin-bottom:8px;
+    }
+
+    .summary-box .sub{
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    .summary-box.positive .value{color:var(--green)}
+    .summary-box.negative .value{color:var(--red)}
+    .summary-box.neutral .value{color:#475569}
+
+    .section-bar{
+      background:#fff;
+      border-bottom:1px solid var(--line);
+    }
+
+    .section-bar-inner{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      padding:18px 0;
+    }
+
+    .section-tabs{
+      display:flex;
+      gap:26px;
+      align-items:center;
+      font-size:16px;
+      font-weight:700;
+    }
+
+    .section-tabs .active{
+      color:#0f172a;
+      position:relative;
+      padding-bottom:12px;
+    }
+
+    .section-tabs .active::after{
+      content:"";
+      position:absolute;
+      left:0;
+      right:0;
+      bottom:-18px;
+      height:3px;
+      border-radius:999px;
+      background:#043A66;
+    }
+
+    .section-date{
+      font-size:16px;
+      font-weight:800;
+      color:#0f172a;
+    }
+
+    .cards-section{
+      padding:36px 0 48px;
+    }
+
+    .cards-grid{
+      display:grid;
+      grid-template-columns:repeat(4, minmax(0, 1fr));
+      gap:28px 18px;
+    }
+
+    .card{
+      background:transparent;
+    }
+
+    .thumb{
+      position:relative;
+      aspect-ratio:16/10;
+      overflow:hidden;
+      background:#dbe7f4;
+      margin-bottom:14px;
+    }
+
+    .thumb.gradient-1{background:linear-gradient(135deg,#173b69,#5a8fd1)}
+    .thumb.gradient-2{background:linear-gradient(135deg,#75503d,#d0a97f)}
+    .thumb.gradient-3{background:linear-gradient(135deg,#512d3a,#d2707d)}
+    .thumb.gradient-4{background:linear-gradient(135deg,#1f4d4a,#6aa8a2)}
+    .thumb.gradient-5{background:linear-gradient(135deg,#243b72,#95a4d9)}
+    .thumb.gradient-6{background:linear-gradient(135deg,#6b4a1c,#cfa45c)}
+    .thumb.gradient-7{background:linear-gradient(135deg,#5c1f45,#d96fa7)}
+    .thumb.gradient-8{background:linear-gradient(135deg,#12425f,#4eb4d9)}
+
+    .thumb-badge{
+      position:absolute;
+      right:10px;
+      top:10px;
+      width:30px;
+      height:30px;
+      border-radius:10px;
+      background:rgba(15,23,42,.58);
+      color:#fff;
+      display:grid;
+      place-items:center;
+      font-size:14px;
+      z-index:2;
+    }
+
+    .thumb-time{
+      position:absolute;
+      right:10px;
+      bottom:10px;
+      z-index:2;
+      background:rgba(17,24,39,.76);
+      color:#fff;
+      font-size:12px;
+      padding:5px 8px;
+      border-radius:999px;
+      font-weight:700;
+    }
+
+    .card h4{
+      margin:0 0 8px;
+      font-size:18px;
+      line-height:1.45;
+      letter-spacing:-0.04em;
+      word-break:keep-all;
+      color:#111827;
+    }
+
+    .card .author{
+      font-size:13px;
+      color:var(--muted);
+    }
+
+    @media (max-width:1180px){
+      .hero{grid-template-columns:1fr}
+      .cards-grid{grid-template-columns:repeat(3, minmax(0,1fr))}
+    }
+
+    @media (max-width:860px){
+      .topbar{height:auto;padding:16px 0}
+      .topbar-inner{flex-direction:column;align-items:flex-start}
+      .hero-left{padding:28px 24px}
+      .hero-title{font-size:38px}
+      .hero-bottom,
+      .sentiment-summary{grid-template-columns:1fr}
+      .cards-grid{grid-template-columns:repeat(2, minmax(0,1fr))}
+      .section-bar-inner{flex-direction:column;align-items:flex-start}
+    }
+
+    @media (max-width:560px){
+      .container{width:calc(100% - 24px)}
+      .logo{font-size:34px}
+      .hero-title{font-size:31px}
+      .cards-grid{grid-template-columns:1fr}
+      .thumb{border-radius:14px}
+    }
+  </style>
+</head>
+
+<body class="run-gradient">
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <div class="brand">
+        <h1 class="logo">
+          <span class="dabee">DABEE</span>
+          <span class="run">RUN</span>
+        </h1>
+        <nav class="nav">
+          <span class="live">LIVE</span>
+          <span>다시보기</span>
+          <span>분야별 뉴스</span>
+          <span>이슈</span>
+          <span>리포트</span>
+        </nav>
+      </div>
+
+      <div class="icons">
+        <div class="icon-btn">⌕</div>
+        <div class="icon-btn">☰</div>
+      </div>
+    </div>
+  </header>
+
+  <section class="run-preview-bar">
+    <div class="container run-preview-inner">
+      <strong>RUN 컬러 미리보기</strong>
+      <div class="run-buttons">
+        <button class="run-btn active" data-run="run-gradient">진한 남색 그라데이션</button>
+        <button class="run-btn" data-run="run-deep">JTBC 남색 단색</button>
+        <button class="run-btn" data-run="run-blacknavy">거의 블랙 네이비</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="hero-wrap">
+    <div class="container hero">
+      <div class="hero-left">
+        <div>
+          <div class="hero-kicker">
+            <span class="pill white">DABEE RUN 브리프</span>
+            <span class="pill positive">오늘의 톤: 우호적</span>
+          </div>
+
+          <h2 class="hero-title">
+            오늘의 하이닉스 여론은<br>
+            <span class="accent">긍정 흐름</span>이 우세합니다
+          </h2>
+
+          <p class="hero-desc">
+            HBM 기대감과 AI 메모리 수요 관련 보도가 우호 여론을 이끌고 있습니다.
+            반면 경쟁사 공급 확대 이슈는 단기 리스크로 분류됩니다.
+          </p>
+
+          <div class="hero-meta">
+            <span>핵심뉴스 12건</span>
+            <span>리스크 기사 3건</span>
+            <span>전일 대비 +8p</span>
+            <span>업데이트 09:30 KST</span>
+          </div>
+        </div>
+
+        <div class="hero-bottom">
+          <div class="mini-stat">
+            <span>Sentiment Index</span>
+            <b>72</b>
+          </div>
+          <div class="mini-stat">
+            <span>우호 기사 비중</span>
+            <b>62%</b>
+          </div>
+          <div class="mini-stat">
+            <span>비우호 기사 비중</span>
+            <b>18%</b>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-right">
+        <div class="trend-panel">
+          <div class="trend-head">
+            <div>
+              <h3>여론 추이</h3>
+              <p>최근 7일 기준 Sentiment Index 흐름</p>
+            </div>
+            <div class="index-chip">
+              <span>Today</span>
+              <b>72</b>
+            </div>
+          </div>
+
+          <svg class="chart" viewBox="0 0 520 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <line x1="0" y1="20" x2="520" y2="20" stroke="#E5E7EB"/>
+            <line x1="0" y1="60" x2="520" y2="60" stroke="#E5E7EB"/>
+            <line x1="0" y1="100" x2="520" y2="100" stroke="#E5E7EB"/>
+            <line x1="0" y1="140" x2="520" y2="140" stroke="#E5E7EB"/>
+
+            <path d="M20 112 C60 108, 85 94, 120 98 C160 102, 190 74, 220 78 C255 82, 286 64, 320 68 C360 72, 390 54, 420 58 C452 62, 475 44, 500 48 L500 140 L20 140 Z"
+              fill="url(#paint0_linear)" opacity="0.18"/>
+
+            <path d="M20 112 C60 108, 85 94, 120 98 C160 102, 190 74, 220 78 C255 82, 286 64, 320 68 C360 72, 390 54, 420 58 C452 62, 475 44, 500 48"
+              stroke="url(#paint1_linear)" stroke-width="4" stroke-linecap="round"/>
+
+            <circle cx="20" cy="112" r="5" fill="#043A66"/>
+            <circle cx="120" cy="98" r="5" fill="#043A66"/>
+            <circle cx="220" cy="78" r="5" fill="#043A66"/>
+            <circle cx="320" cy="68" r="5" fill="#043A66"/>
+            <circle cx="420" cy="58" r="5" fill="#043A66"/>
+            <circle cx="500" cy="48" r="6" fill="#0A6EA3"/>
+
+            <defs>
+              <linearGradient id="paint0_linear" x1="20" y1="48" x2="500" y2="140" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#043A66"/>
+                <stop offset="1" stop-color="#0A6EA3"/>
+              </linearGradient>
+              <linearGradient id="paint1_linear" x1="20" y1="48" x2="500" y2="112" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#043A66"/>
+                <stop offset="1" stop-color="#0A6EA3"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+
+        <div class="sentiment-summary">
+          <div class="summary-box positive">
+            <span class="label">우호</span>
+            <div class="value">62%</div>
+            <div class="sub">HBM · AI 서버 · 실적 기대</div>
+          </div>
+          <div class="summary-box negative">
+            <span class="label">비우호</span>
+            <div class="value">18%</div>
+            <div class="sub">경쟁사 증설 · 가격 변동성</div>
+          </div>
+          <div class="summary-box neutral">
+            <span class="label">중립</span>
+            <div class="value">20%</div>
+            <div class="sub">시장 동향 · 일반 산업 기사</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-bar">
+    <div class="container section-bar-inner">
+      <div class="section-tabs">
+        <span class="active">핵심뉴스</span>
+        <span>우호 기사</span>
+        <span>비우호 기사</span>
+      </div>
+      <div class="section-date">2026년 5월 2일 토요일</div>
+    </div>
+  </section>
+
+  <main class="container cards-section">
+    <section class="cards-grid">
+      <article class="card">
+        <div class="thumb gradient-1">
+          <div class="thumb-badge">↗</div>
+          <div class="thumb-time">03:57</div>
+        </div>
+        <h4>HBM 기대감에 하이닉스 우호 여론 확대…AI 메모리 수요 기사 증가</h4>
+        <div class="author">경제팀</div>
+      </article>
+
+      <article class="card">
+        <div class="thumb gradient-2">
+          <div class="thumb-badge">↗</div>
+          <div class="thumb-time">02:33</div>
+        </div>
+        <h4>외신, 고대역폭 메모리 공급 경쟁 주목…고객사 확보전 본격화</h4>
+        <div class="author">산업팀</div>
+      </article>
+
+      <article class="card">
+        <div class="thumb gradient-3">
+          <div class="thumb-badge">↗</div>
+          <div class="thumb-time">02:03</div>
+        </div>
+        <h4>증권가 “실적 개선 기대감 유효”…긍정 리포트 인용 기사 확산</h4>
+        <div class="author">증권팀</div>
+      </article>
+
+      <article class="card">
+        <div class="thumb gradient-4">
+          <div class="thumb-badge">↗</div>
+          <div class="thumb-time">02:06</div>
+        </div>
+        <h4>경쟁사 메모리 증설 가능성 보도…단기 공급 경쟁 우려 부각</h4>
+        <div class="author">산업팀</div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const buttons = document.querySelectorAll('.run-btn');
+
+    buttons.forEach(button => {
+      button.addEventListener('click', () => {
+        buttons.forEach(b => b.classList.remove('active'));
+        button.classList.add('active');
+
+        document.body.classList.remove('run-gradient', 'run-deep', 'run-blacknavy');
+        document.body.classList.add(button.dataset.run);
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,22 +1,61 @@
-// app/web/static/js/feed.js
-// 기사 피드: 필터, 페이지네이션, 실시간 신규 알림.
-
+// Feed page: filter toolbar, card grid, pagination, new-article alert.
 (function () {
-  const LIMIT = 30;
-  let offset  = 0;
-  let total   = 0;
-  let pending = false;
+  const LIMIT = 24;
+  let offset = 0, total = 0, pending = false;
   const filters = { tier: '', theme: '', search: '', tone: '' };
 
-  // ── 기사 로드 ────────────────────────────────────────────
+  const GRADS = ['g1','g2','g3','g4','g5','g6','g7','g8'];
+  let gradIdx = 0;
+
+  // ── Helpers ──────────────────────────────────────────────
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c =>
+      ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+  function toneClass(t) {
+    if (t === '경고') return 'warn';
+    if (t === '주의') return 'watch';
+    if (t === '양호') return 'good';
+    return '';
+  }
+  function timeStr(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
+
+  // ── Card builder (matches dashboard card style) ──────────
+  function buildCard(a) {
+    const g = GRADS[gradIdx++ % 8];
+    const tier = a.tier || 3;
+    const tc = toneClass(a.tone_level);
+    const link = a.original_url || a.url || '#';
+    const title = a.title_clean || a.title || '';
+    const press = a.press || a.theme_label || '';
+    const t = timeStr(a.pub_date);
+
+    const art = document.createElement('a');
+    art.className = 'card-article';
+    art.href = link;
+    art.target = '_blank';
+    art.rel = 'noopener';
+    art.innerHTML = `
+      <div class="thumb ${g}">
+        <span class="thumb-tier ${tier === 1 ? 't1' : ''}">TIER ${tier}</span>
+        ${t ? `<div class="thumb-time">${t}</div>` : ''}
+        ${tc ? `<div class="tone-strip ${tc}"></div>` : ''}
+      </div>
+      <h4 class="card-title-text">${esc(title)}</h4>
+      <div class="card-author">${esc(press)}</div>
+    `;
+    return art;
+  }
+
+  // ── Load ─────────────────────────────────────────────────
   async function load(reset = false) {
     if (pending) return;
     pending = true;
-
-    if (reset) {
-      offset = 0;
-      document.getElementById('articleList').innerHTML = '';
-    }
+    if (reset) { offset = 0; gradIdx = 0; document.getElementById('articleList').innerHTML = ''; }
 
     const p = new URLSearchParams({ limit: LIMIT, offset });
     if (filters.tier)   p.set('tier',   filters.tier);
@@ -35,45 +74,17 @@
 
       const list = document.getElementById('articleList');
       if (!data.items.length && reset) {
-        list.innerHTML = '<div class="muted" style="text-align:center;padding:32px;">검색 결과가 없습니다.</div>';
+        list.innerHTML = '<div class="muted" style="grid-column:1/-1;text-align:center;padding:40px;">검색 결과가 없습니다.</div>';
       }
       data.items.forEach(a => list.appendChild(buildCard(a)));
 
       const more = document.getElementById('feedMore');
       if (more) more.style.display = offset >= total ? 'none' : 'block';
-    } catch (e) {
-      console.error('[feed] 로드 실패', e);
-    }
+    } catch(e) { console.error('[feed] 로드 실패', e); }
     pending = false;
   }
 
-  // ── 카드 생성 ────────────────────────────────────────────
-  function buildCard(a) {
-    const div   = document.createElement('div');
-    div.className = 'item';
-
-    const title  = a.title_clean || a.title || '';
-    const link   = a.original_url || a.url || '#';
-    const date   = a.pub_date ? a.pub_date.substring(0, 16).replace('T', ' ') : '';
-
-    const meta = [];
-    if (a.tier)        meta.push(`<span class="tag tier-${a.tier}">TIER ${a.tier}</span>`);
-    if (a.theme_label) meta.push(`<span class="tag">${esc(a.theme_label)}</span>`);
-    if (a.press)       meta.push(`<span class="tag">${esc(a.press)}</span>`);
-    if (a.tone_level)  meta.push(`<span class="tag tone-tag tone-${esc(a.tone_level)}">${esc(a.tone_level)}</span>`);
-    if (date)          meta.push(`<span class="muted">${date}</span>`);
-
-    div.innerHTML = `
-      <div class="title">
-        <a href="${esc(link)}" target="_blank" rel="noopener">${esc(title)}</a>
-      </div>
-      ${a.summary ? `<div class="summary">${esc(a.summary)}</div>` : ''}
-      <div class="meta">${meta.join('')}</div>
-    `;
-    return div;
-  }
-
-  // ── 테마 드롭다운 ────────────────────────────────────────
+  // ── Themes dropdown ──────────────────────────────────────
   async function loadThemes() {
     try {
       const themes = await fetch('/api/themes').then(r => r.json());
@@ -87,29 +98,23 @@
     } catch {}
   }
 
-  function esc(s) {
-    return String(s ?? '').replace(/[&<>"']/g, c => (
-      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-    ));
-  }
-
-  // ── 초기화 ───────────────────────────────────────────────
+  // ── Init ─────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
     loadThemes();
     load();
 
     let searchTimer = null;
 
-    document.getElementById('filterTier').addEventListener('change', (e) => {
+    document.getElementById('filterTier').addEventListener('change', e => {
       filters.tier = e.target.value; load(true);
     });
-    document.getElementById('filterTheme').addEventListener('change', (e) => {
+    document.getElementById('filterTheme').addEventListener('change', e => {
       filters.theme = e.target.value; load(true);
     });
-    document.getElementById('filterTone').addEventListener('change', (e) => {
+    document.getElementById('filterTone').addEventListener('change', e => {
       filters.tone = e.target.value; load(true);
     });
-    document.getElementById('filterSearch').addEventListener('input', (e) => {
+    document.getElementById('filterSearch').addEventListener('input', e => {
       clearTimeout(searchTimer);
       searchTimer = setTimeout(() => { filters.search = e.target.value.trim(); load(true); }, 400);
     });
@@ -120,22 +125,17 @@
       });
       load(true);
     });
-    document.getElementById('loadMoreBtn').addEventListener('click', () => load());
-
-    const newAlertBtn = document.getElementById('newAlertBtn');
-    if (newAlertBtn) {
-      newAlertBtn.addEventListener('click', () => {
-        document.getElementById('newAlert').classList.add('hidden');
-        load(true);
-      });
-    }
+    document.getElementById('loadMoreBtn')?.addEventListener('click', () => load());
+    document.getElementById('newAlertBtn')?.addEventListener('click', () => {
+      document.getElementById('newAlert').classList.add('hidden');
+      load(true);
+    });
   });
 
-  // ── WebSocket: 신규 기사 알림 ─────────────────────────────
+  // ── WebSocket: new article banner ────────────────────────
   window.addEventListener('dabee:pipeline', (e) => {
     if (e.detail.phase === 'done' && (e.detail.result?.new ?? 0) > 0) {
-      const alertEl = document.getElementById('newAlert');
-      if (alertEl) alertEl.classList.remove('hidden');
+      document.getElementById('newAlert')?.classList.remove('hidden');
     }
   });
 })();
