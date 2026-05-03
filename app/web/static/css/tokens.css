@@ -940,3 +940,33 @@ table.rcp { width: 100%; border-collapse: collapse; }
 
 /* trend 패널이 position: relative 가져야 툴팁 좌표 잘 잡힘 */
 .trend-panel { position: relative; }
+
+/* STEP-3B-7: 카드 매칭 키워드 + 테마 태그 */
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.card-theme {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #EEF2FF;
+  color: #3730A3;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.card-kw {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #F3F4F6;
+  color: #6B7280;
+  font-size: 11px;
+  font-weight: 500;
+  font-feature-settings: "tnum";
+}
+.card-hostile .card-theme { background: #FEF2F2; color: #B91C1C; }
+.card-reference .card-theme { background: #F1F5F9; color: #475569; }

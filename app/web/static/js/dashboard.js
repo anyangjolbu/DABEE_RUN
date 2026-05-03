@@ -7,7 +7,19 @@
   let allArticles = [];
 
   // ── Helpers ──────────────────────────────────────────────
-  function esc(s) {
+  // theme_label에서 이모지/공백 제거
+function cleanLabel(s) {
+  return String(s ?? '').replace(/[^\p{L}\p{N}\s가-힣]/gu, '').trim();
+}
+
+// matched_kw (CSV 또는 배열) → 해시태그 배열
+function parseKeywords(mk) {
+  if (!mk) return [];
+  if (Array.isArray(mk)) return mk.filter(Boolean);
+  return String(mk).split(',').map(s => s.trim()).filter(Boolean);
+}
+
+function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, c =>
       ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   }
@@ -65,6 +77,16 @@
       : '';
     const titleAttr = reason ? `title="${esc(reason)}"` : '';
 
+    // 매칭 키워드 + 테마 태그
+    const keywords    = parseKeywords(a.matched_kw || a.matched_keywords);
+    const themeName   = cleanLabel(a.theme_label);
+    const tagParts    = [];
+    if (themeName) tagParts.push(`<span class="card-theme">${esc(themeName)}</span>`);
+    keywords.slice(0, 4).forEach(k => {
+      tagParts.push(`<span class="card-kw">#${esc(k)}</span>`);
+    });
+    const tagsHtml = tagParts.length ? `<div class="card-tags">${tagParts.join('')}</div>` : '';
+
     const footParts = [];
     if (press) footParts.push(`<span class="card-press">${esc(press)}</span>`);
     if (t)     footParts.push(`<span class="card-time">${t}</span>`);
@@ -75,6 +97,7 @@
         <h4 class="card-title-text" ${titleAttr}>${esc(title)}</h4>
         ${summaryHtml}
         ${reasonHtml}
+        ${tagsHtml}
         <div class="card-foot">${footParts.join('<span class="card-dot">·</span>')}</div>
       </div>
       ${meta.strip ? `<div class="tone-strip ${meta.strip}"></div>` : ''}
