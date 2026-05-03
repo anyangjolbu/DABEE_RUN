@@ -32,9 +32,10 @@ function esc(s) {
     if (track === 'reference') {
       return { tag: 'reference', label: '참고', strip: 'reference' };
     }
-    if (cls === '비우호') return { tag: 'hostile', label: '비우호', strip: 'hostile' };
-    if (cls === '양호')   return { tag: 'normal',  label: '양호',  strip: 'normal'  };
-    if (cls === '미분석') return { tag: 'unknown', label: '미분석', strip: 'unknown' };
+    if (cls === '비우호')  return { tag: 'hostile', label: '비우호',  strip: 'hostile' };
+    if (cls === '양호')    return { tag: 'normal',  label: '양호',    strip: 'normal'  };
+    if (cls === '미분석')  return { tag: 'unknown', label: '미분석',  strip: 'unknown' };
+    if (cls === 'LLM에러') return { tag: 'unknown', label: 'LLM에러', strip: 'unknown' };
     return { tag: '', label: '', strip: '' };
   }
 

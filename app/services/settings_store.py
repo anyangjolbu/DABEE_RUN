@@ -3,8 +3,12 @@ settings.json 로드/저장 + 기본값 병합.
 
 STEP 4A-1:
 - search_themes를 monitor/reference 두 트랙으로 단순화
-- monitor: SK하이닉스 + 임원 (톤분석 ON, 텔레그램 ON)
-- reference: 경쟁사·업계 (톤분석 OFF, 본문 크롤링 OFF, 텔레그램 OFF 기본)
+- monitor: SK하이닉스 직접 (톤분석 + 텔레그램)
+- reference: 경쟁사·업계 (본문에 SK등장 시 monitor로 자동 승격)
+
+STEP-3B-13:
+- tier/tone_analysis 필드 제거. 분기 기준은 track 단일.
+- schedule_interval_min과 schedule_interval_minutes 둘 다 인식 (scheduler.py 호환).
 """
 
 import json
@@ -17,7 +21,8 @@ logger = logging.getLogger(__name__)
 
 
 DEFAULT_SETTINGS: dict[str, Any] = {
-    "schedule_interval_min": 10,
+    "schedule_interval_minutes": 10,
+    "article_expire_hours":      24,
 
     # 네이버 API
     "naver_display_count": 30,
@@ -39,28 +44,22 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # 검색 테마 (두 트랙)
     "search_themes": {
         "hynix_main": {
-            "label":            "🔴 SK하이닉스",
-            "track":            "monitor",
-            "tier":             1,
+            "label":  "🔴 SK하이닉스",
+            "track":  "monitor",
             "keywords": [
                 "SK하이닉스", "하이닉스", "SKhynix", "hynix", "솔리다임",
                 "곽노정", "최태원",
             ],
-            "tone_analysis":    True,
-            "telegram_default": True,
         },
         "industry_ref": {
-            "label":            "⚪ 업계 참고",
-            "track":            "reference",
-            "tier":             2,
+            "label":  "⚪ 업계 참고",
+            "track":  "reference",
             "keywords": [
                 "삼성전자", "삼성DS",
                 "HBM", "DRAM", "NAND",
                 "엔비디아", "NVIDIA", "TSMC", "마이크론",
                 "파운드리", "반도체",
             ],
-            "tone_analysis":    False,
-            "telegram_default": False,
         },
     },
 

@@ -1,14 +1,23 @@
 // app/web/static/js/admin/keywords.js
 // 키워드·테마·블랙리스트 관리 페이지 로직.
+// STEP-3B-13: tier 시스템 제거 → track(monitor/reference) 단일 분기로 통일.
 
 let settings = {};
+
+// 트랙 라벨 / CSS class
+const TRACK_META = {
+  monitor:   { label: '모니터', cls: 'monitor',   desc: 'SK하이닉스 직접 — 톤분석 + 텔레그램' },
+  reference: { label: '참고',   cls: 'reference', desc: '경쟁사·업계 — 본문에 SK 등장 시 자동 승격' },
+};
 
 // ── 설정 로드 ──────────────────────────────────────────────
 async function loadSettings() {
   const res = await adminFetch('/api/admin/settings');
   settings = await res.json();
-  document.getElementById('schedInterval').value = settings.schedule_interval_minutes ?? 10;
-  document.getElementById('expireHours').value   = settings.article_expire_hours      ?? 1;
+  document.getElementById('schedInterval').value =
+    settings.schedule_interval_minutes ?? settings.schedule_interval_min ?? 10;
+  document.getElementById('expireHours').value =
+    settings.article_expire_hours ?? 1;
   renderThemes();
   renderBlacklist('domainBlacklist', settings.domain_blacklist || [], 'domain_blacklist');
   renderBlacklist('titleBlacklist',  settings.title_blacklist  || [], 'title_blacklist');
@@ -26,47 +35,44 @@ function renderThemes() {
   }
 
   Object.entries(themes).forEach(([id, theme]) => {
+    const track = theme.track || 'monitor';
+    const meta  = TRACK_META[track] || TRACK_META.monitor;
+
     const card = document.createElement('div');
     card.className = 'theme-card card';
-    card.style.marginBottom = 'var(--space-3)';
     card.dataset.id = id;
 
     card.innerHTML = `
       <div class="theme-header">
-        <span class="tier-badge t${theme.tier}">TIER ${theme.tier}</span>
-        <input class="theme-label-input" value="${escapeHtml(theme.label)}" data-id="${id}" />
-        <select class="input-field tier-select" style="width:80px;" data-id="${id}">
-          <option value="1" ${theme.tier==1?'selected':''}>T1</option>
-          <option value="2" ${theme.tier==2?'selected':''}>T2</option>
-          <option value="3" ${theme.tier==3?'selected':''}>T3</option>
+        <span class="track-badge ${meta.cls}">${meta.label}</span>
+        <input class="theme-label-input input-field" value="${escapeHtml(theme.label || '')}" data-id="${id}" />
+        <select class="input-field track-select" data-id="${id}">
+          <option value="monitor"   ${track==='monitor'?'selected':''}>모니터</option>
+          <option value="reference" ${track==='reference'?'selected':''}>참고</option>
         </select>
-        <label class="toggle" title="톤분석 활성화">
-          <input type="checkbox" class="tone-toggle" data-id="${id}" ${theme.tone_analysis?'checked':''}/>
-          <span class="toggle-track"></span>
-        </label>
-        <span class="muted" style="font-size:11px;">톤분석</span>
-        <button class="btn btn-danger" style="padding:4px 10px;font-size:12px;margin-left:auto;" data-del="${id}">삭제</button>
+        <button class="btn btn-danger btn-sm" data-del="${id}">삭제</button>
       </div>
+      <div class="track-desc muted">${meta.desc}</div>
       <div class="chip-list" id="chips-${id}"></div>
     `;
     container.appendChild(card);
 
-    renderKeywordChips(id, theme.keywords);
+    renderKeywordChips(id, theme.keywords || []);
 
     // 라벨 변경
     card.querySelector('.theme-label-input').addEventListener('change', (e) => {
       settings.search_themes[e.target.dataset.id].label = e.target.value;
     });
-    // 티어 변경
-    card.querySelector('.tier-select').addEventListener('change', (e) => {
-      const tid = e.target.dataset.id;
-      settings.search_themes[tid].tier = parseInt(e.target.value);
-      card.querySelector('.tier-badge').className = `tier-badge t${e.target.value}`;
-      card.querySelector('.tier-badge').textContent = `TIER ${e.target.value}`;
-    });
-    // 톤분석 토글
-    card.querySelector('.tone-toggle').addEventListener('change', (e) => {
-      settings.search_themes[e.target.dataset.id].tone_analysis = e.target.checked;
+    // 트랙 변경
+    card.querySelector('.track-select').addEventListener('change', (e) => {
+      const tid     = e.target.dataset.id;
+      const newTrk  = e.target.value;
+      const newMeta = TRACK_META[newTrk] || TRACK_META.monitor;
+      settings.search_themes[tid].track = newTrk;
+      const badge = card.querySelector('.track-badge');
+      badge.className = `track-badge ${newMeta.cls}`;
+      badge.textContent = newMeta.label;
+      card.querySelector('.track-desc').textContent = newMeta.desc;
     });
     // 테마 삭제
     card.querySelector('[data-del]').addEventListener('click', (e) => {
@@ -75,8 +81,6 @@ function renderThemes() {
       if (confirm(`"${label}" 테마를 삭제하시겠습니까?`)) {
         delete settings.search_themes[tid];
         renderThemes();
-        renderBlacklist('domainBlacklist', settings.domain_blacklist || [], 'domain_blacklist');
-        renderBlacklist('titleBlacklist',  settings.title_blacklist  || [], 'title_blacklist');
       }
     });
   });
@@ -186,9 +190,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('addThemeBtn').addEventListener('click', () => {
     const id = `theme_${Date.now()}`;
-    settings.search_themes[id] = { label: '새 테마', tier: 3, keywords: [], tone_analysis: false };
+    settings.search_themes[id] = { label: '새 테마', track: 'reference', keywords: [] };
     renderThemes();
-    // 새 카드로 스크롤
     const newCard = document.querySelector(`[data-id="${id}"]`);
     newCard?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     newCard?.querySelector('.theme-label-input')?.focus();

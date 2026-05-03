@@ -72,13 +72,13 @@ def main():
         for t in targets:
             idx = body.find(t)
             if idx >= 0:
-                print(f"   '{t}' @ 위치 {idx} (1800자 한도 {'안' if idx < 1800 else '밖 ❌ 잘림!'})")
+                print(f"   '{t}' @ 위치 {idx} (2500자 한도 {'안' if idx < 2500 else '밖 ❌ 잘림!'})")
                 start = max(0, idx - 60)
                 end = min(len(body), idx + len(t) + 100)
                 print(f"     ...{body[start:end]}...")
-        # 1800자 한도 표시
-        if len(body) > 1800:
-            print(f"\n   ⚠️ 본문이 {len(body)}자인데 톤 분석은 1800자만 사용 (BODY_LIMIT)")
+        # 2500자 한도 표시
+        if len(body) > 2500:
+            print(f"\n   ⚠️ 본문이 {len(body)}자인데 톤 분석은 2500자만 사용 (BODY_LIMIT)")
             print(f"      잘리는 부분: ...{body[1750:1850]}...")
 
     # 톤 분석 직접 호출

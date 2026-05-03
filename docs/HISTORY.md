@@ -1,5 +1,47 @@
 # 개발 이력 (HISTORY)
 
+## 2026-05-04 — STEP-3B-13: tier 시스템 제거, track 단일 분기로 통일
+- **무엇을**: settings DEFAULT에서 `tier`, `tone_analysis` 필드 삭제, 관리자 키워드 페이지(keywords.html/js)의 TIER 1/2/3 셀렉트·배지를 monitor/reference 트랙 토글로 교체, base_admin/CSS 캐시버스팅 `?v=4d`, settings_store의 `schedule_interval_min` → `schedule_interval_minutes` 통일(scheduler.py와 키 일치).
+- **왜**: STEP 4A-1에서 track 도입 후 tier 필드는 의미를 잃었지만 UI에 잔존. 운영자가 새 테마를 추가할 때 무엇을 골라야 할지 혼란을 유발. 또한 `schedule_interval_min` vs `_minutes` 키 불일치로 관리자 UI 변경값이 스케줄러에 반영 안 되는 잠복 버그.
+- **어떻게**: keywords.js에 `TRACK_META` 매핑 추가, 트랙 변경 시 배지/설명 즉시 갱신. `tier` 필드는 백엔드에서 fallback default(1)로 흘러서 무해하므로 DB 컬럼은 유지(레거시).
+- **검증**: 관리자 키워드 페이지에서 트랙 토글 시 monitor↔reference 즉시 갱신, 저장 후 settings.json에 `track`만 반영.
+- **남은 일**: 레거시 `articles.tier`, `recipients.receive_tier1_*` 컬럼 청소 (현재는 무해하게 미사용).
+
+## 2026-05-04 — STEP-3B-12: 톤 분석 재시도 3회 + LLM에러 명시 분류
+- **무엇을**: tone_analyzer.py에 `RETRY_MAX=3` 루프 도입, JSON 파싱 실패/빈 응답/예외 시 동일 프롬프트로 즉시 재호출. 3회 모두 실패하면 새 분류 `LLM에러`로 저장 (기존 `미분석`과 분리). dashboard.js classMeta가 LLM에러를 회색 배지로 표시.
+- **왜**: production에서 중앙일보 [이하경 칼럼](https://www.joongang.co.kr/article/25425473) 기사가 `미분석/JSON 파싱 실패`로 저장되는 사례 발견. 로컬 재현 시에는 동일 모델·프롬프트로 정상 응답이 나옴 → Gemini 일시 장애 가능성. `미분석`은 "Gemini가 관련없음 판정"인 경우와 섞여 추후 식별이 어려움. 또한 키워드 기반 폴백을 시도해 봤으나 사용자 피드백상 오분류 위험이 더 커서 폐기.
+- **어떻게**: 단일 try/except를 N회 루프로 교체, `_call_gemini`에서 `resp.candidates[0].finish_reason` 추출해 차단 원인 로깅. `_llm_error_result()` 헬퍼로 `LLM에러` 분류 보존. 키워드 폴백 함수(`_keyword_fallback`, `NEGATIVE_HINTS`) 삭제.
+- **검증**: scripts/diag_tone_case.py로 동일 URL 분석 시 비우호로 정상 분류. body 크롤링 실패(빈 description-only) 시뮬레이션도 비우호 응답.
+- **남은 일**: `tone_classification='LLM에러'`인 기사들을 일괄 재분석하는 admin 엔드포인트 추가 검토.
+
+## 2026-05-03~04 — STEP-3B-1 ~ STEP-3B-11: 운영 안정화 패치 모음
+- **무엇을**: (1) ADMIN DB 리셋 엔드포인트 + 수집기간(`collection_lookback_days`) 설정 + 신규 기사 분류 분포 로깅, (2) naver_api `pubDate→pub_date_iso` 변환 + lookback 필터 실제 적용, (3) reference 트랙 기사 분류값을 `참고`로 명시(NULL 제거), (4) logging→WebSocket 브릿지 활성화로 어드민 Live Log 패널 실시간 출력, (5) 카드뉴스에 매칭 키워드/테마 태그 표시(미분석 사유 즉시 식별), (6) Hero 문구 3단계(긍정/혼조/부정) 정리, (7) 우측 요약박스 라벨 통일, (8) `scripts/diag_tone_case.py` 추가, (9) reference 트랙도 본문 크롤링 후 SK등장 시 monitor 자동 승격, BODY_LIMIT 절단 방지 위해 우선 영역 추출 함수 도입.
+- **왜**: STEP 4A-1 직후 운영하면서 발견된 미시 버그·UX 결함들을 빠르게 메움. 특히 reference로 분류된 기사 본문에 SK가 등장해도 톤분석이 누락되는 문제가 잦았음.
+- **어떻게**: 작은 단위 PR(commit)로 누적. 각 단계는 git log의 `STEP-3B-N` 메시지 참고.
+- **검증**: 매 단계마다 deploy → 로컬 검증 → main push.
+- **남은 일**: STEP-3B-12로 LLM 응답 견고화, STEP-3B-13으로 tier 잔재 제거.
+
+## 2026-05-03 — STEP 4C: NSS(-100~+100) 재설계 + 7일 추이 백엔드 API
+- **무엇을**: 기존 `Sentiment Index 0~100`을 NSS(Net Sentiment Score, -100~+100)로 변경. `/api/sentiment_trend` 엔드포인트 추가 — 일별 양호/비우호 카운트 + NSS 점수 반환. 대시보드 추이 차트를 막대(양호 위/비우호 아래) + NSS 라인의 복합 차트로 재구성.
+- **왜**: 기존 0~100 척도는 직관적이지 않고, 7일 추이 데이터는 클라이언트에서 랜덤 노이즈로 채워져 있었음.
+- **어떻게**: NSS = (양호 - 비우호) / (양호 + 비우호) * 100. 백엔드 SQL로 일별 집계.
+- **검증**: 대시보드에서 7일 막대+라인이 실제 데이터로 표시.
+
+## 2026-05-03 — STEP 4B: OG 이미지 추출 + 카드 썸네일
+- **무엇을**: crawler.py에 `fetch_body_full()` 추가, og:image / twitter:image / link rel=image_src 우선순위로 대표 이미지 추출. 본문과 1회 HTTP GET으로 함께 처리. articles 테이블에 `image_url` 컬럼 추가.
+- **왜**: 카드 썸네일이 그라디언트만 표시되어 시각적 단조로움.
+- **어떻게**: BeautifulSoup으로 메타태그 파싱, 트래킹 픽셀·아이콘은 정규식 패턴으로 차단.
+- **검증**: 신규 기사 카드에 실제 기사 이미지 표시 (실패 시 텍스트 카드 fallback).
+- **이후 변경**: 이미지 표시 안정성 문제로 텍스트 카드 위주 레이아웃으로 회귀.
+
+## 2026-05-03 — STEP 4A-2: 카드 분류 배지 + 비우호 reason 노출
+- **무엇을**: 대시보드 카드를 분류 배지(비우호/양호/미분석/참고) + 비우호 사유 인용으로 재구성. 섹션 탭을 `전체 / 비우호 / 양호 / 경쟁사 참고` 4분으로 재배치.
+- **왜**: 분류 결과를 한눈에 보기 어려웠고, 비우호 사유가 카드에서 안 보였음.
+- **어떻게**: dashboard.js classMeta로 track + classification → 배지/색상/스트립 매핑.
+- **검증**: 탭 클릭 시 즉시 필터링.
+
+---
+
 ## 2026-05-03 — STEP 4A-1: 톤 분류 시스템 백엔드 재설계
 - **무엇을**: tone_analyzer 3분류(비우호/일반/미분석) 전면 개편, relevance에 메이저 언론사+단독 자동통과, settings_store에 monitor/reference 두 트랙, pipeline 트랙별 분기, repository에 track/tone_classification/tone_reason/tone_confidence/image_url 컬럼 반영, recipient_filter 분류 기반 매칭.
 - **왜**: breaknews 칼럼 같은 구조적 문제 제기 기사가 '양호'로 잘못 분류되는 문제 + Sentiment Index 정합성 부족 + TIER 시스템 복잡도 제거.

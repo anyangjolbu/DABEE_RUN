@@ -1,22 +1,27 @@
 """
 톤 분류 (모니터링 트랙 전용).
 
-STEP 4A-1 + 핫픽스 2:
+STEP 4A-1 + STEP-3B-11 + STEP-3B-12:
 - response_mime_type="application/json"으로 JSON 강제 출력
 - response_schema로 스키마 고정 (Gemini가 형식 어긋날 수 없음)
-- 본문 2500자 → 1800자로 단축 (토큰 절약)
+- BODY_LIMIT 2500자 유지 (1800자로 줄이면 후반부 부정 맥락이 잘려 오분류 발생)
 - hostile_sentences 최대 3개 제한
-- max_output_tokens 1500 → 2000
+- STEP-3B-11: 본문 2500자 초과 시 모니터링 대상 등장부 우선 추출 (절단 방지)
+- STEP-3B-12: Gemini 호출 최대 3회 재시도 + finish_reason 진단.
+              모두 실패 시 키워드 추정 대신 'LLM에러' 분류로 명시 저장
+              → 추후 admin에서 재분석 가능.
 
 분류:
-    비우호 — 직접 부정 + 구조적 문제 제기 + 부정 맥락
-    일반   — 사실 보도, 평이한 동향
-    미분석 — Gemini 호출 실패, 응답 깨짐, 관련없음
+    비우호    — 직접 부정 + 구조적 문제 제기 + 부정 맥락
+    양호      — 사실 보도, 평이한 동향
+    미분석    — Gemini가 '관련없음'으로 판정 (모니터링 대상 미등장)
+    LLM에러   — Gemini 호출/파싱 N회 실패 (재분석 대상)
 """
 
 import json
 import logging
 import re
+from typing import Optional
 
 from google.genai import types
 
@@ -129,6 +134,72 @@ def _build_legacy_fields(classification: str, hostile: list, total: int) -> dict
     return {"level": "-", "tone": "-", "hostile_count": 0, "total_count": 0}
 
 
+# ── Gemini 호출 재시도 횟수 ─────────────────────────────────────
+# 1회 호출 + (RETRY_MAX-1)회 재시도. 모두 실패 시 'LLM에러' 분류.
+RETRY_MAX = 3
+
+
+def _llm_error_result(detail: str) -> dict:
+    """Gemini 호출/파싱 N회 실패 시 명시적 LLM에러 분류로 저장."""
+    return {
+        "classification":    "LLM에러",
+        "reason":            f"LLM 응답 실패: {detail}",
+        "confidence":        "n/a",
+        "hostile_sentences": [],
+        "total_sentences":   0,
+        "level":             "-",
+        "tone":              "-",
+        "hostile_count":     0,
+        "total_count":       0,
+    }
+
+
+def _call_gemini(client, model: str, prompt: str) -> tuple[str, str]:
+    """Gemini 호출. (raw_text, finish_reason) 반환. 빈 응답이어도 예외 없이 처리."""
+    resp = client.models.generate_content(
+        model=model,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            max_output_tokens=2000,
+            temperature=0,
+            response_mime_type="application/json",
+            response_schema=TONE_RESPONSE_SCHEMA,
+        ),
+    )
+    finish_reason = ""
+    try:
+        cands = getattr(resp, "candidates", None) or []
+        if cands:
+            fr = getattr(cands[0], "finish_reason", None)
+            finish_reason = str(fr) if fr else ""
+    except Exception:
+        pass
+    raw = ""
+    try:
+        raw = (resp.text or "").strip()
+    except Exception:
+        # 일부 케이스에서 .text 접근 자체가 예외를 던질 수 있음
+        raw = ""
+    return raw, finish_reason
+
+
+def _parse_response(raw: str) -> Optional[dict]:
+    """Gemini raw 응답을 파싱. 실패 시 None."""
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # 종종 ```json ... ``` 으로 감싸서 오는 경우 방어
+        m = re.search(r"\{[\s\S]*\}", raw)
+        if m:
+            try:
+                return json.loads(m.group(0))
+            except Exception:
+                return None
+        return None
+
+
 def analyze_tone(article: dict, theme_label: str, settings: dict) -> dict:
     client = get_client()
     if client is None:
@@ -175,74 +246,81 @@ def analyze_tone(article: dict, theme_label: str, settings: dict) -> dict:
 [중요 원칙]
 - 한 줄이라도 모니터링 대상에 부정 영향이 있으면 비우호
 - 직접 비판이 없어도 "구조적 문제의 출발점/대표 사례"로 거론되면 비우호
-- 부정 단어가 있어도 결론이 긍정이면 일반
-- 부정이 회사가 아닌 시장/제품 일반에 향하면 일반
+- 부정 단어가 있어도 결론이 긍정이면 양호
+- 부정이 회사가 아닌 시장/제품 일반에 향하면 양호
 - hostile_sentences는 최대 {HOSTILE_LIMIT}개까지만 인용 (가장 강한 것 우선)
 
 기사:
 {content}"""
 
-    raw = ""
-    try:
-        resp = client.models.generate_content(
-            model=model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                max_output_tokens=2000,
-                temperature=0,
-                response_mime_type="application/json",
-                response_schema=TONE_RESPONSE_SCHEMA,
-            ),
-        )
-        raw = (resp.text or "").strip()
+    # ── Gemini 호출: 최대 RETRY_MAX회 시도 ────────────────────
+    parsed: Optional[dict] = None
+    last_finish = ""
+    last_error  = ""
+    last_raw    = ""
 
-        # response_mime_type="application/json"이면 raw가 깨끗한 JSON
-        parsed = json.loads(raw)
+    for attempt in range(1, RETRY_MAX + 1):
+        try:
+            raw, finish = _call_gemini(client, model, prompt)
+            last_raw, last_finish = raw, finish
+            parsed = _parse_response(raw)
+            if parsed is not None:
+                if attempt > 1:
+                    logger.info(f"  ✅ {attempt}/{RETRY_MAX}회차 시도에서 응답 성공")
+                break
+            logger.warning(
+                f"  ⚠️ [{attempt}/{RETRY_MAX}] 응답 파싱 실패 "
+                f"(finish_reason={finish!r}, raw_len={len(raw)})"
+            )
+        except Exception as e:
+            last_error = f"{type(e).__name__}: {e}"
+            logger.warning(f"  ⚠️ [{attempt}/{RETRY_MAX}] 호출 예외: {last_error}")
 
-        classification = str(parsed.get("classification", "")).strip()
-        reason         = str(parsed.get("reason", "")).strip()
-        confidence     = str(parsed.get("confidence", "medium")).strip().lower()
-        hostile        = parsed.get("hostile_sentences", []) or []
-        total          = int(parsed.get("total_sentences", 0) or 0)
+    # ── 모두 실패 → 'LLM에러'로 명시 저장 (추후 재분석 가능) ──
+    if parsed is None:
+        detail = last_error or f"finish={last_finish!r} raw='{last_raw[:80]}'"
+        logger.error(f"❌ {RETRY_MAX}회 모두 실패 → 'LLM에러'로 저장. {detail}")
+        return _llm_error_result(detail[:200])
 
-        if not isinstance(hostile, list):
-            hostile = []
-        hostile = [s for s in hostile if isinstance(s, str) and s.strip()]
-        hostile = hostile[:HOSTILE_LIMIT]
+    # ── 응답 정규화 ──────────────────────────────────────────
+    classification = str(parsed.get("classification", "")).strip()
+    reason         = str(parsed.get("reason", "")).strip()
+    confidence     = str(parsed.get("confidence", "medium")).strip().lower()
+    hostile        = parsed.get("hostile_sentences", []) or []
+    total          = int(parsed.get("total_sentences", 0) or 0)
 
-        if classification not in ("비우호", "양호", "관련없음"):
-            logger.warning(f"  ⚠️ 알 수 없는 분류 '{classification}' → 미분석")
-            return _empty_result(f"알 수 없는 분류: {classification}")
+    if not isinstance(hostile, list):
+        hostile = []
+    hostile = [s for s in hostile if isinstance(s, str) and s.strip()]
+    hostile = hostile[:HOSTILE_LIMIT]
 
-        if classification == "관련없음":
-            result = _empty_result(reason or "모니터링 대상이 등장하지 않음")
-            result["total_sentences"] = total
-            result["total_count"]     = total
-            result["confidence"]      = confidence if confidence in ("high","medium","low") else "medium"
-            logger.info(f"  📊 결과: [관련없음] {result['reason'][:50]}")
-            return result
+    if classification not in ("비우호", "양호", "관련없음"):
+        # 스키마 강제 위반 → 비정상 응답으로 간주, LLM에러로 저장
+        logger.error(f"  ❌ 알 수 없는 분류 '{classification}' → 'LLM에러'")
+        return _llm_error_result(f"unknown classification: {classification}")
 
-        if confidence not in ("high", "medium", "low"):
-            confidence = "medium"
-
-        legacy = _build_legacy_fields(classification, hostile, total)
-        result = {
-            "classification":    classification,
-            "reason":            reason,
-            "confidence":        confidence,
-            "hostile_sentences": hostile,
-            "total_sentences":   total,
-            **legacy,
-        }
-        logger.info(
-            f"  📊 결과: [{classification}/{confidence}] "
-            f"비우호문장 {len(hostile)}/{total} | {reason[:50]}"
-        )
+    if classification == "관련없음":
+        result = _empty_result(reason or "모니터링 대상이 등장하지 않음")
+        result["total_sentences"] = total
+        result["total_count"]     = total
+        result["confidence"]      = confidence if confidence in ("high","medium","low") else "medium"
+        logger.info(f"  📊 결과: [관련없음] {result['reason'][:50]}")
         return result
 
-    except json.JSONDecodeError as e:
-        logger.error(f"❌ JSON 파싱 실패: {e} | raw='{raw[:200]}'")
-        return _empty_result(f"JSON 파싱 실패")
-    except Exception as e:
-        logger.error(f"❌ 톤 분류 실패: {e} | raw='{raw[:200]}'")
-        return _empty_result(f"분류 실패: {type(e).__name__}")
+    if confidence not in ("high", "medium", "low"):
+        confidence = "medium"
+
+    legacy = _build_legacy_fields(classification, hostile, total)
+    result = {
+        "classification":    classification,
+        "reason":            reason,
+        "confidence":        confidence,
+        "hostile_sentences": hostile,
+        "total_sentences":   total,
+        **legacy,
+    }
+    logger.info(
+        f"  📊 결과: [{classification}/{confidence}] "
+        f"비우호문장 {len(hostile)}/{total} | {reason[:50]}"
+    )
+    return result
