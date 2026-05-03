@@ -708,3 +708,60 @@ table.rcp { width: 100%; border-collapse: collapse; }
   .cards-grid, .feed-cards .cards-grid { grid-template-columns: 1fr; }
   .hero-bottom, .sentiment-summary { grid-template-columns: 1fr; }
 }
+
+/* ═════════════════════════════════════════════════════════
+   STEP-4A-2: classification badges & reason block
+   ═════════════════════════════════════════════════════════ */
+
+/* 카드 상단 배지 (썸네일 좌상단) */
+.thumb-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: rgba(255,255,255,0.92);
+  color: #111;
+  backdrop-filter: blur(2px);
+  z-index: 2;
+}
+.badge-hostile  { background: #DC2626; color: #fff; }
+.badge-normal   { background: #10B981; color: #fff; }
+.badge-unknown  { background: #9CA3AF; color: #fff; }
+.badge-reference{ background: #E5E7EB; color: #374151; }
+
+/* 톤 스트립 (카드 하단 색띠) */
+.tone-strip {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 4px;
+}
+.tone-strip.hostile  { background: #DC2626; }
+.tone-strip.normal   { background: #10B981; }
+.tone-strip.unknown  { background: #9CA3AF; }
+.tone-strip.reference{ background: #CBD5E1; }
+
+/* 비우호 카드 강조 */
+.card-hostile {
+  outline: 1px solid rgba(220, 38, 38, 0.3);
+  box-shadow: 0 1px 6px rgba(220, 38, 38, 0.08);
+}
+
+/* reason 블록 (비우호 카드 하단) */
+.card-reason {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: #FEF2F2;
+  border-left: 3px solid #DC2626;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #7F1D1D;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

@@ -1,4 +1,5 @@
 // Public dashboard: hero sentiment, trend chart, article cards, section tabs.
+// STEP 4A-2 (옵션 A): tone_classification 기반 배지/필터 + reason 노출
 (function () {
   const LIMIT = 12;
   let offset = 0, total = 0, pending = false;
@@ -6,19 +7,27 @@
   let allArticles = [];
 
   const GRADS = ['g1','g2','g3','g4','g5','g6','g7','g8'];
-  let gradIdx = 0;
 
   // ── Helpers ──────────────────────────────────────────────
   function esc(s) {
     return String(s ?? '').replace(/[&<>"']/g, c =>
       ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   }
-  function toneClass(t) {
-    if (t === '경고') return 'warn';
-    if (t === '주의') return 'watch';
-    if (t === '양호') return 'good';
-    return '';
+
+  // 신규 분류 → CSS 클래스 / 배지 라벨
+  function classMeta(a) {
+    const track = a.track || 'monitor';
+    const cls   = a.tone_classification || '';
+
+    if (track === 'reference') {
+      return { tag: 'reference', label: '참고', strip: 'reference' };
+    }
+    if (cls === '비우호') return { tag: 'hostile', label: '비우호', strip: 'hostile' };
+    if (cls === '일반')   return { tag: 'normal',  label: '일반',  strip: 'normal'  };
+    if (cls === '미분석') return { tag: 'unknown', label: '미분석', strip: 'unknown' };
+    return { tag: '', label: '', strip: '' };
   }
+
   function timeStr(dateStr) {
     if (!dateStr) return '';
     const d = new Date(dateStr);
@@ -29,27 +38,36 @@
 
   // ── Card builder ─────────────────────────────────────────
   function buildCard(a, idx) {
-    const g = GRADS[idx % 8];
-    const tier = a.tier || 3;
-    const tc = toneClass(a.tone_level);
-    const link = a.original_url || a.url || '#';
+    const g     = GRADS[idx % 8];
+    const meta  = classMeta(a);
+    const link  = a.original_url || a.url || '#';
     const title = a.title_clean || a.title || '';
     const press = a.press || a.theme_label || '';
-    const t = timeStr(a.pub_date);
+    const t     = timeStr(a.pub_date);
+    const reason = a.tone_reason || '';
 
     const art = document.createElement('a');
-    art.className = 'card-article';
+    art.className = `card-article card-${meta.tag}`;
     art.href = link;
     art.target = '_blank';
     art.rel = 'noopener';
+
+    // 비우호일 때 reason을 title attribute(툴팁)와 카드 하단에 함께 표시
+    const reasonBlock = (meta.tag === 'hostile' && reason)
+      ? `<div class="card-reason">📌 ${esc(reason)}</div>`
+      : '';
+
+    const titleAttr = reason ? `title="${esc(reason)}"` : '';
+
     art.innerHTML = `
       <div class="thumb ${g}">
-        <span class="thumb-tier ${tier === 1 ? 't1' : ''}">TIER ${tier}</span>
+        ${meta.label ? `<span class="thumb-badge badge-${meta.tag}">${meta.label}</span>` : ''}
         ${t ? `<div class="thumb-time">${t}</div>` : ''}
-        ${tc ? `<div class="tone-strip ${tc}"></div>` : ''}
+        ${meta.strip ? `<div class="tone-strip ${meta.strip}"></div>` : ''}
       </div>
-      <h4 class="card-title-text">${esc(title)}</h4>
+      <h4 class="card-title-text" ${titleAttr}>${esc(title)}</h4>
       <div class="card-author">${esc(press)}</div>
+      ${reasonBlock}
     `;
     return art;
   }
@@ -65,15 +83,15 @@
   });
 
   function filterByTab(items) {
-    if (currentTab === 'good') return items.filter(a => a.tone_level === '양호');
-    if (currentTab === 'warn') return items.filter(a => a.tone_level === '경고');
+    if (currentTab === 'hostile')   return items.filter(a => a.tone_classification === '비우호' && (a.track || 'monitor') === 'monitor');
+    if (currentTab === 'normal')    return items.filter(a => a.tone_classification === '일반'  && (a.track || 'monitor') === 'monitor');
+    if (currentTab === 'reference') return items.filter(a => (a.track || 'monitor') === 'reference');
     return items;
   }
 
   function renderCards() {
     const grid = document.getElementById('cardsGrid');
     grid.innerHTML = '';
-    gradIdx = 0;
     const filtered = filterByTab(allArticles);
     if (!filtered.length) {
       grid.innerHTML = '<div class="muted" style="grid-column:1/-1;text-align:center;padding:40px;">기사가 없습니다.</div>';
@@ -107,46 +125,54 @@
     load(true);
   });
 
-  // ── Sentiment computation ────────────────────────────────
+  // ── Sentiment computation (monitor 트랙 기준) ─────────────
   function computeSentiment(items) {
     if (!items.length) return;
-    let good = 0, warn = 0, watch = 0, neut = 0;
-    items.forEach(a => {
-      if (a.tone_level === '양호') good++;
-      else if (a.tone_level === '경고') warn++;
-      else if (a.tone_level === '주의') watch++;
-      else neut++;
+
+    // monitor 트랙만 인덱스 산정 대상
+    const mon = items.filter(a => (a.track || 'monitor') === 'monitor');
+    let hostile = 0, normal = 0, unknown = 0;
+    mon.forEach(a => {
+      const c = a.tone_classification;
+      if (c === '비우호')      hostile++;
+      else if (c === '일반')   normal++;
+      else                     unknown++;
     });
-    const t = items.length;
-    const score = Math.round((good + 0.5 * (watch + neut)) / t * 100);
-    const goodPct  = Math.round(good / t * 100);
-    const warnPct  = Math.round(warn / t * 100);
-    const neutPct  = 100 - goodPct - warnPct;
+
+    const denom = hostile + normal;  // 미분석 제외
+    const score = denom > 0
+      ? Math.round((normal / denom) * 100)
+      : 50;
+
+    const monT = mon.length || 1;
+    const hostilePct = Math.round(hostile / monT * 100);
+    const normalPct  = Math.round(normal  / monT * 100);
+    const unknownPct = Math.max(0, 100 - hostilePct - normalPct);
 
     // Hero
     document.getElementById('heroScore').textContent = score;
-    document.getElementById('heroGood').textContent  = `${goodPct}%`;
-    document.getElementById('heroWarn').textContent  = `${warnPct}%`;
+    document.getElementById('heroGood').textContent  = `${normalPct}%`;
+    document.getElementById('heroWarn').textContent  = `${hostilePct}%`;
     document.getElementById('trendScore').textContent = score;
 
     // Pill
     const pill = document.getElementById('heroPill');
-    if (score >= 60) {
-      pill.textContent = '오늘의 톤: 우호적';
+    if (hostile === 0 && normal > 0) {
+      pill.textContent = '오늘의 톤: 양호';
       pill.className = 'pill positive';
-    } else if (score >= 40) {
+    } else if (hostile <= 1) {
       pill.textContent = '오늘의 톤: 관망';
       pill.className = 'pill neutral';
     } else {
-      pill.textContent = '오늘의 톤: 비우호';
+      pill.textContent = '오늘의 톤: 비우호 감지';
       pill.className = 'pill negative';
     }
 
     // Hero title
     const titleEl = document.getElementById('heroTitle');
-    if (score >= 60) {
-      titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">긍정 흐름</span>이 우세합니다';
-    } else if (score >= 40) {
+    if (hostile === 0) {
+      titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">특이 시그널 없음</span>';
+    } else if (hostile <= 1) {
       titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">관망 국면</span>입니다';
     } else {
       titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">비우호 흐름</span>이 감지됩니다';
@@ -154,21 +180,22 @@
 
     // Desc
     document.getElementById('heroDesc').textContent =
-      `총 ${t}건 분석 · 우호 ${goodPct}% · 비우호 ${warnPct}% · 중립 ${neutPct}%`;
+      `모니터 ${mon.length}건 · 일반 ${normal}건 · 비우호 ${hostile}건 · 미분석 ${unknown}건 (참고 ${items.length - mon.length}건 별도)`;
 
     // Meta
     const now = new Date();
     const hh = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');
     document.getElementById('heroMeta').innerHTML =
-      `<span>전체 기사 ${t}건</span>` +
-      `<span>TIER 1 경고 ${items.filter(a => a.tier === 1 && a.tone_level === '경고').length}건</span>` +
+      `<span>전체 ${items.length}건</span>` +
+      `<span>모니터 ${mon.length}건</span>` +
+      `<span>비우호 ${hostile}건</span>` +
       `<span>업데이트 ${hh}:${mm} KST</span>`;
 
     // Summary boxes
-    document.getElementById('sumGood').textContent = `${goodPct}%`;
-    document.getElementById('sumWarn').textContent = `${warnPct}%`;
-    document.getElementById('sumNeut').textContent = `${neutPct}%`;
+    document.getElementById('sumGood').textContent = `${normalPct}%`;
+    document.getElementById('sumWarn').textContent = `${hostilePct}%`;
+    document.getElementById('sumNeut').textContent = `${unknownPct}%`;
 
     // Section date
     const today = now.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
@@ -179,15 +206,14 @@
   }
 
   // ── Trend chart ──────────────────────────────────────────
+  // ⚠️ 7일치 트렌드는 백엔드 데이터가 없어서 today만 실제값. STEP 4B에서 백엔드 API 추가 예정.
   function renderTrendChart(todayScore) {
-    // 7일치 dummy data — 오늘만 실제값
     const now = new Date();
     const data = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       const label = `${d.getMonth()+1}/${d.getDate()}`;
-      // 최근으로 갈수록 today score 수렴
       const noise = i === 0 ? 0 : (Math.random() - 0.5) * 16;
       const base  = todayScore - i * 2;
       data.push({ date: label, score: Math.min(100, Math.max(5, Math.round(base + noise))) });
