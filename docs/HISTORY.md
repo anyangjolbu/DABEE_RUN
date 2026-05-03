@@ -8,6 +8,33 @@
 YYYY-MM-DD — 한 줄 요약
 무엇을 했는가 왜 했는가 어떻게 동작하는가 (필요 시) 남은 일 (있다면)
 
+## 2026-05-02 — STEP 2B: AI 호출 모듈 (관련성·요약·톤분석)
+
+**무엇을**
+- `app/services/gemini_client.py`: Gemini 클라이언트 싱글톤.
+  키 누락 시 None 반환 → 호출자가 폴백 가능.
+- `app/services/relevance.py`: 4단계 관련성 필터
+  (영문제거 → 화이트리스트 → 블랙리스트 → Gemini 배치).
+- `app/services/summarizer.py`: 티어별 모델 선택 + 시스템 프롬프트
+  사용 + description 폴백.
+- `app/services/tone_analyzer.py`: 비우호 문장 추출, 결과 dict
+  (level, tone, hostile_count, total_count, hostile_sentences).
+- `scripts/test_ai.py`: 수집→필터→크롤링→요약→톤분석 통합 검증.
+
+**왜**
+- Gemini 클라이언트를 모듈마다 만들면 중복·일관성 문제 → 싱글톤화.
+- 관련성 필터를 4단계로 나눠 Gemini 호출을 최소화 (90% 이상이
+  화이트/블랙에서 결정 → 비용 절감).
+- summarizer가 본문 크롤링까지 하던 구버전 구조를 분리.
+  파이프라인이 본문을 미리 받아두고 summarizer는 텍스트만 처리 →
+  단일 책임, 테스트 용이.
+- 톤 분석 결과를 단순 라벨이 아닌 dict로 풍부화. PR팀이 가장 원하는
+  "어떤 문장이 비우호적이었나"를 그대로 노출.
+
+**확인 방법**
+- `python -m scripts.test_ai`
+- 관련성 필터 통과, 요약 정상 출력, 톤 레벨/문장 출력 확인
+
 ## 2026-05-02 — STEP 2A: 저수준 서비스 모듈 (수집·매체·크롤링)
 
 **무엇을**
