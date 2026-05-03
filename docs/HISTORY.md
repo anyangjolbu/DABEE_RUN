@@ -4,13 +4,21 @@
 
 ---
 
+## 2026-05-03 — STEP 4: Railway 배포 준비
+
+- **무엇을**: `railway.toml`, `Procfile`, `.env.example` 신규, `README.md` 전면 재작성.
+- **왜**: GitHub push만으로 Railway가 자동 빌드·배포하려면 시작 명령과 헬스체크 경로를 선언해야 하고, 신규 팀원이 환경변수를 빠짐없이 설정할 수 있도록 문서가 필요했음.
+- **어떻게**: `railway.toml`에 Nixpacks 빌드, `uvicorn app.main:app --host 0.0.0.0 --port $PORT` 시작, `/api/health` 헬스체크 300초 타임아웃 선언. `Procfile`은 fallback. `.env.example`에 전체 환경변수 설명 포함. `README.md`에 로컬 실행 + Railway 배포 순서(Volume 마운트 `/app/data`, Variables 입력) 정리.
+- **검증**: `git push origin main` → Railway 자동 배포 시작, `/api/health` → `{"status":"ok","db":"ok"}`.
+- **남은 일**: 운영 중 수신자 추가, 키워드 튜닝. 스케일 필요 시 PostgreSQL 이전.
+
 ## 2026-05-03 — STEP 3C: 공개 피드·리포트 + 일간 리포트 자동화
 
 - **무엇을**: `app/services/report_builder.py` 신규, `app/core/scheduler.py` 일간 리포트 루프 추가, `app/api/public.py` 기사 필터·테마·리포트 API 추가, `app/core/repository.py` 필터 검색·일간 기사·리포트 CRUD 추가, `public/feed.html`, `public/report.html`, `feed.js`, `report.js`, CSS 추가, `/feed`·`/report` 라우트 실제 연결.
 - **왜**: 공개 피드·리포트 페이지가 대시보드 임시 렌더로 남아 있었고, 일간 리포트 발송 자동화가 없었음.
 - **어떻게**: `Scheduler._daily_report_loop()` — 1분 간격으로 현재 시각을 체크해 `daily_report_hour_kst` 도달 시 `report_builder.run_daily_report()` 호출 (중복 방지: `daily_reports` 테이블 확인). `article_filter()` — 동적 WHERE 절로 tier·theme·search·tone 조합 필터. 피드 JS — 디바운스 검색 + 더 보기 페이지네이션 + WebSocket 신규 기사 알림 배너.
 - **검증**: `uvicorn app.main:app --reload` → `/feed` 필터·검색 동작, `/report` 리포트 아코디언 열림, `/api/themes` 테마 목록 반환, `/api/reports` 빈 목록 반환(기사 없어도 500 없음).
-- **남은 일**: Railway 배포, 볼륨 설정, 운영 환경 검증 (STEP 4).
+- **남은 일**: ~~Railway 배포, 볼륨 설정, 운영 환경 검증~~ → STEP 4에서 완료.
 
 ## 2026-05-03 — STEP 3B: 관리자 인증 + 관리 UI
 
