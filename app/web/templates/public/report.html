@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}리포트 — DABEE Run{% endblock %}
+
+{% block content %}
+<div class="report-page-header">
+  <h2 class="report-page-title">일간 리포트</h2>
+  <p class="muted">매일 지정 시각에 발송되는 주요 뉴스 요약입니다.</p>
+</div>
+
+<div id="emptyMsg" class="muted" style="display:none;text-align:center;padding:48px;">
+  아직 발송된 리포트가 없습니다.
+</div>
+
+<div id="reportList"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/report.js"></script>
+{% endblock %}

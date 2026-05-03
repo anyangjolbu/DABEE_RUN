@@ -231,6 +231,92 @@ def recipient_add(chat_id: str, name: str, role: str = "",
 
 
 # ════════════════════════════════════════════════════════════
+#  Article (filtered search)
+# ════════════════════════════════════════════════════════════
+def article_filter(
+    limit:  int = 50,
+    offset: int = 0,
+    tier:   Optional[int]  = None,
+    theme:  Optional[str]  = None,
+    search: Optional[str]  = None,
+    tone:   Optional[str]  = None,
+) -> tuple[list[dict], int]:
+    """필터/검색 조합 기사 조회. (rows, total) 반환."""
+    where:  list[str] = []
+    params: list      = []
+
+    if tier is not None:
+        where.append("tier = ?"); params.append(tier)
+    if theme:
+        where.append("theme_id = ?"); params.append(theme)
+    if search:
+        like = f"%{search}%"
+        where.append("(title_clean LIKE ? OR summary LIKE ?)")
+        params.extend([like, like])
+    if tone:
+        where.append("tone_level = ?"); params.append(tone)
+
+    w = ("WHERE " + " AND ".join(where)) if where else ""
+    order = "ORDER BY COALESCE(pub_date, collected_at) DESC"
+
+    with get_conn() as conn:
+        total = conn.execute(f"SELECT COUNT(*) FROM articles {w}", params).fetchone()[0]
+        rows  = conn.execute(
+            f"SELECT * FROM articles {w} {order} LIMIT ? OFFSET ?",
+            params + [limit, offset],
+        ).fetchall()
+    return [dict(r) for r in rows], total
+
+
+def article_daily(date_str: str, limit: int = 20) -> list[dict]:
+    """특정 날짜(YYYY-MM-DD KST)의 기사. tier 오름차순."""
+    start = f"{date_str}T00:00:00"
+    end   = f"{date_str}T23:59:59"
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT * FROM articles
+               WHERE (pub_date >= ? AND pub_date <= ?)
+                  OR (pub_date IS NULL AND collected_at >= ? AND collected_at <= ?)
+               ORDER BY tier ASC, COALESCE(pub_date, collected_at) DESC
+               LIMIT ?""",
+            (start, end, start, end, limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ════════════════════════════════════════════════════════════
+#  Daily Reports
+# ════════════════════════════════════════════════════════════
+def report_save(date_str: str, body: str, recipients_count: int) -> None:
+    sent_at = datetime.now(config.KST).isoformat()
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT OR REPLACE INTO daily_reports
+               (report_date, sent_at, body, recipients_count)
+               VALUES (?,?,?,?)""",
+            (date_str, sent_at, body, recipients_count),
+        )
+
+
+def report_list(limit: int = 30) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT report_date, sent_at, recipients_count"
+            " FROM daily_reports ORDER BY report_date DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def report_get(date_str: str) -> Optional[dict]:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM daily_reports WHERE report_date = ?", (date_str,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+# ════════════════════════════════════════════════════════════
 #  Admin Sessions
 # ════════════════════════════════════════════════════════════
 def session_create(token: str, user_agent: str, expires_at: str) -> None:

@@ -93,18 +93,16 @@ async def page_home(request: Request):
 
 @app.get("/feed", response_class=HTMLResponse)
 async def page_feed(request: Request):
-    """STEP 3C에서 본격 구성. 임시로 대시보드와 동일."""
     return templates.TemplateResponse(
-        "public/dashboard.html",
+        "public/feed.html",
         {"request": request, "active": "feed"},
     )
 
 
 @app.get("/report", response_class=HTMLResponse)
 async def page_report(request: Request):
-    """STEP 3C에서 본격 구성."""
     return templates.TemplateResponse(
-        "public/dashboard.html",
+        "public/report.html",
         {"request": request, "active": "report"},
     )
 

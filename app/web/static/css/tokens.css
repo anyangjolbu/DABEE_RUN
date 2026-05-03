@@ -183,6 +183,71 @@ a:hover { text-decoration: underline; }
 
 .button-row { display: flex; gap: var(--space-3); flex-wrap: wrap; }
 
+/* ── 피드 페이지 ──────────────────────────────────────── */
+.feed-toolbar {
+  display: flex; flex-direction: column; gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.filter-row {
+  display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+}
+.filter-select {
+  padding: 7px 10px; border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm); font-family: var(--font-sans);
+  font-size: 13px; background: var(--color-surface); cursor: pointer; outline: none;
+}
+.filter-select:focus { border-color: var(--color-accent); }
+.filter-search {
+  flex: 1; min-width: 180px; padding: 7px 10px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  font-family: var(--font-sans); font-size: 13px; outline: none;
+  background: var(--color-surface);
+}
+.filter-search:focus { border-color: var(--color-accent); }
+.btn-reset { font-size: 12px; padding: 6px 10px; }
+.feed-meta  { font-size: 12px; }
+.feed-more  { text-align: center; padding: var(--space-4) 0; }
+
+.new-alert {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-3) var(--space-4); margin-bottom: var(--space-3);
+  background: #fff7ed; border: 1px solid #fbbf24; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 600; color: #92400e;
+}
+.new-alert.hidden { display: none; }
+.new-alert button {
+  background: #fbbf24; border: none; border-radius: var(--radius-sm);
+  padding: 4px 10px; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+
+.tone-tag.tone-경고 { background: #fef2f2; color: #cc0000; }
+.tone-tag.tone-주의 { background: #fff7ed; color: #cc7700; }
+.tone-tag.tone-양호 { background: #f0fdf4; color: #00aa44; }
+
+/* ── 리포트 페이지 ────────────────────────────────────── */
+.report-page-header { margin-bottom: var(--space-5); }
+.report-page-title  { font-size: 20px; font-weight: 800; color: var(--color-navy); margin: 0 0 4px; }
+
+.report-card { margin-bottom: var(--space-3); padding: 0; overflow: hidden; }
+.report-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  cursor: pointer; user-select: none;
+}
+.report-header:hover { background: #fafafa; }
+.report-header-left { display: flex; flex-direction: column; gap: 2px; }
+.report-date { font-size: 15px; font-weight: 700; color: var(--color-navy); }
+.report-meta { font-size: 12px; }
+.report-chevron { color: var(--color-muted); font-size: 12px; }
+.report-body { border-top: 1px solid var(--color-border); }
+.report-body.hidden { display: none; }
+.report-text {
+  padding: var(--space-4) var(--space-5);
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.7;
+  white-space: pre-wrap; word-break: break-all;
+  margin: 0; color: var(--color-text);
+}
+
 /* ── 관리자 로그인 ────────────────────────────────────── */
 .login-body {
   display: flex; align-items: center; justify-content: center;

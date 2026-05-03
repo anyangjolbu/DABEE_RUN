@@ -34,6 +34,7 @@ class Scheduler:
 
     def __init__(self) -> None:
         self._task: Optional[asyncio.Task] = None
+        self._report_task: Optional[asyncio.Task] = None
         self._running_pipeline: bool = False
         self._stop_event: asyncio.Event = asyncio.Event()
         self._next_run_at: Optional[datetime] = None
@@ -78,7 +79,8 @@ class Scheduler:
             logger.info("스케줄러 이미 실행 중")
             return
         self._stop_event.clear()
-        self._task = asyncio.create_task(self._loop(), name="scheduler")
+        self._task        = asyncio.create_task(self._loop(),               name="scheduler")
+        self._report_task = asyncio.create_task(self._daily_report_loop(),  name="daily_report")
         logger.info("🟢 스케줄러 시작")
 
     async def stop(self) -> None:
@@ -86,12 +88,12 @@ class Scheduler:
             return
         logger.info("🔴 스케줄러 종료 요청")
         self._stop_event.set()
-        try:
-            await asyncio.wait_for(self._task, timeout=60)
-        except asyncio.TimeoutError:
-            logger.warning("스케줄러 종료 타임아웃 — 강제 cancel")
-            self._task.cancel()
-        self._task = None
+        for t in filter(None, [self._task, self._report_task]):
+            try:
+                await asyncio.wait_for(asyncio.shield(t), timeout=60)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                t.cancel()
+        self._task = self._report_task = None
         logger.info("스케줄러 종료 완료")
 
     async def trigger_now(self) -> None:
@@ -118,6 +120,32 @@ class Scheduler:
                 await asyncio.sleep(1)
 
             await self._run_once()
+
+    async def _daily_report_loop(self) -> None:
+        """매일 settings.daily_report_hour_kst 시각에 일간 리포트 실행."""
+        from app.services import report_builder
+        _sent_today: Optional[str] = None
+
+        while not self._stop_event.is_set():
+            # 1분마다 체크 (60초씩 쪼개 정지 신호 즉시 반응)
+            for _ in range(60):
+                if self._stop_event.is_set():
+                    return
+                await asyncio.sleep(1)
+
+            try:
+                cfg  = settings_store.load_settings()
+                if not cfg.get("daily_report_enabled", True):
+                    continue
+                now  = datetime.now(config.KST)
+                hour = int(cfg.get("daily_report_hour_kst", 7))
+                today = now.strftime("%Y-%m-%d")
+                if now.hour == hour and _sent_today != today:
+                    _sent_today = today
+                    logger.info(f"📋 일간 리포트 시각 도달 ({now.strftime('%H:%M')} KST)")
+                    await asyncio.to_thread(report_builder.run_daily_report)
+            except Exception as e:
+                logger.error(f"❌ 일간 리포트 루프 오류: {e}", exc_info=True)
 
     async def _run_once(self) -> None:
         if self._running_pipeline:
