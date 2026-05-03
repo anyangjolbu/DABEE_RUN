@@ -51,6 +51,22 @@ async def lifespan(app: FastAPI):
 
     init_db()
     attach_ws_log_handler()
+
+    # STEP-3B-14: settings.search_themes에 맞춰 articles.track 백필
+    # 구 데이터(track 누락 시 monitor 기본)로 인해 경쟁사/업계 기사가
+    # monitor로 잘못 저장돼 있는 케이스를 일괄 정정.
+    try:
+        from app.core import models
+        from app.core.db import get_conn
+        from app.services.settings_store import load_settings
+        themes = load_settings().get("search_themes", {})
+        with get_conn() as conn:
+            n = models.backfill_articles_track(conn, themes)
+        if n:
+            logger.info(f"✅ articles.track 백필: 총 {n}건 갱신")
+    except Exception as e:
+        logger.warning(f"⚠️ articles.track 백필 실패(skip): {e}")
+
     await scheduler.start()
 
     logger.info("=" * 60)

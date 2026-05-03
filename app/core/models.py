@@ -146,3 +146,29 @@ def create_all(conn: sqlite3.Connection) -> None:
 
     for stmt in POST_INDEXES:
         conn.execute(stmt)
+
+
+def backfill_articles_track(conn: sqlite3.Connection, themes: dict) -> int:
+    """settings.search_themes의 track에 맞춰 articles.track을 갱신.
+
+    구 데이터(STEP-3B-13 이전)는 모든 테마가 monitor로 저장돼 있어
+    경쟁사·업계 기사도 monitor로 잡히는 문제가 있음. 이 함수는
+    theme_id별 현재 track 설정을 articles에 반영.
+
+    Returns: 갱신된 row 수
+    """
+    total = 0
+    for tid, theme in themes.items():
+        if not isinstance(theme, dict):
+            continue
+        track = theme.get("track")
+        if track not in ("monitor", "reference"):
+            continue
+        cur = conn.execute(
+            "UPDATE articles SET track = ? WHERE theme_id = ? AND (track IS NULL OR track != ?)",
+            (track, tid, track),
+        )
+        if cur.rowcount:
+            logger.info(f"  🔧 [{tid}] articles.track → {track} ({cur.rowcount}건)")
+            total += cur.rowcount
+    return total

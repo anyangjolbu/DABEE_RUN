@@ -85,6 +85,42 @@ def _settings_path() -> str:
     return str(config.SETTINGS_PATH)
 
 
+_PRIORITY_HINTS = (
+    "sk하이닉스", "하이닉스", "skhynix", "hynix", "솔리다임", "곽노정", "최태원",
+)
+
+
+def _infer_track(theme_id: str, theme: dict) -> str:
+    """track 필드 누락 테마의 track 추론.
+
+    1) keywords에 SK하이닉스 핵심 키워드가 있으면 monitor
+    2) theme_id에 'hynix'/'sk' 단서가 있으면 monitor
+    3) 그 외(tier1_samsung, tier3_bigtech 등 경쟁사/업계) → reference
+    """
+    keywords_lower = [str(k).lower() for k in theme.get("keywords", [])]
+    if any(h in kw for h in _PRIORITY_HINTS for kw in keywords_lower):
+        return "monitor"
+    tid_lower = (theme_id or "").lower()
+    if "hynix" in tid_lower or tid_lower.endswith("_sk") or tid_lower.startswith("sk"):
+        return "monitor"
+    return "reference"
+
+
+def _backfill_themes_track(themes: dict) -> bool:
+    """track이 비어있는 테마에 자동 채움. 변경 발생 시 True."""
+    changed = False
+    for tid, theme in themes.items():
+        if not isinstance(theme, dict):
+            continue
+        if theme.get("track") in ("monitor", "reference"):
+            continue
+        inferred = _infer_track(tid, theme)
+        theme["track"] = inferred
+        changed = True
+        logger.info(f"  🔧 [{tid}] track 자동 추론 → {inferred}")
+    return changed
+
+
 def load_settings() -> dict[str, Any]:
     """settings.json을 읽어 기본값과 병합. 파일 없으면 기본값으로 생성."""
     path = _settings_path()
@@ -106,6 +142,11 @@ def load_settings() -> dict[str, Any]:
     # search_themes는 사용자가 비워두면 기본값으로 복원
     if not merged.get("search_themes"):
         merged["search_themes"] = DEFAULT_SETTINGS["search_themes"]
+
+    # track 필드 자동 백필 (구 settings.json 호환)
+    if _backfill_themes_track(merged["search_themes"]):
+        save_settings(merged)
+        logger.info("✅ track 백필 완료 — settings.json 갱신")
 
     return merged
 
