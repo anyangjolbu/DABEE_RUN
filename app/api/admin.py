@@ -177,3 +177,39 @@ async def start_scheduler(_: AdminDep):
 async def stop_scheduler(_: AdminDep):
     await scheduler.stop()
     return {"status": "stopped"}
+
+# ── DB 관리 (STEP 3B-1) ──────────────────────────────────────
+
+@router.post("/db/reset")
+async def db_reset(request: Request, _: AdminDep):
+    """
+    articles + send_log 전체 삭제. 
+    settings/recipients/admin_sessions/themes는 보존.
+    body: {"confirm": "RESET"}  — 안전장치
+    """
+    body = await request.json()
+    if body.get("confirm") != "RESET":
+        raise HTTPException(status_code=400, detail='confirm="RESET" 필요')
+
+    from app.core.db import get_conn
+    with get_conn() as conn:
+        before = conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
+        conn.execute("DELETE FROM send_log")
+        conn.execute("DELETE FROM articles")
+        conn.execute("DELETE FROM sqlite_sequence WHERE name IN ('articles','send_log')")
+        conn.commit()
+    return {"ok": True, "deleted": before}
+
+
+@router.get("/db/stats")
+async def db_stats(_: AdminDep):
+    """대시보드용 빠른 통계."""
+    from app.core.db import get_conn
+    with get_conn() as conn:
+        total = conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
+        rows  = conn.execute("""
+            SELECT track, tone_classification, COUNT(*) as n
+            FROM articles GROUP BY track, tone_classification
+        """).fetchall()
+    dist = [{"track": r["track"], "classification": r["tone_classification"], "n": r["n"]} for r in rows]
+    return {"total": total, "distribution": dist}

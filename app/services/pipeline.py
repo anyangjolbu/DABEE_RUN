@@ -179,6 +179,19 @@ def run_once(dry_run: bool = False,
         else:
             repository.article_mark_sent(article_id, success=False)
 
+    # ── 4.5 분류 분포 로깅 (STEP 3B-1) ──────────────────────
+    if not dry_run:
+        from collections import Counter
+        from app.core.db import get_conn
+        with get_conn() as conn:
+            rows = conn.execute("""
+                SELECT tone_classification, COUNT(*) as n FROM articles 
+                WHERE id IN (SELECT id FROM articles ORDER BY id DESC LIMIT ?)
+                GROUP BY tone_classification
+            """, (saved_count,)).fetchall()
+        dist = {r["tone_classification"] or "NULL": r["n"] for r in rows}
+        logger.info(f"📊 분류 분포 (이번 실행 신규): {dict(dist)}")
+
     # ── 5. 결과 요약 ───────────────────────────────────────
     result = {
         "collected":     len(articles),

@@ -113,6 +113,29 @@
         <span class="sentiment-badge watch" id="sentBadge">● Analyzing</span>
         <div class="sentiment-delta" id="sentDelta"></div>
       </div>
+    <!-- DB & 수집 설정 (STEP 3B-1) -->
+    <div class="panel" style="margin-top:18px">
+      <div class="panel-head"><h3>Database & Collection</h3><span class="sub">debug</span></div>
+      <div class="panel-body">
+        <div id="dbStats" style="font:600 12px/1.6 var(--font-mono);color:var(--muted);margin-bottom:12px;">DB 통계 로딩 중...</div>
+
+        <div class="form-field">
+          <label>네이버 1회 호출당 기사 수 (display, 1~100)</label>
+          <input type="number" class="input-field" id="cfgDisplay" min="1" max="100" />
+        </div>
+        <div class="form-field">
+          <label>최대 기사 수집일 (lookback_days, 0=무제한)</label>
+          <input type="number" class="input-field" id="cfgLookback" min="0" max="30" />
+          <small style="color:var(--muted);font-size:11px;">예: 3 = 3일 이내 기사만 처리. pubDate 기준.</small>
+        </div>
+        <button class="btn btn-primary btn-sm" id="btnSaveCfg">설정 저장</button>
+
+        <hr style="margin:16px 0;border:none;border-top:1px solid var(--border);">
+
+        <button class="btn btn-danger" id="btnDbReset">⚠️ DB 리셋 (articles + send_log 전체 삭제)</button>
+        <div id="dbResult" style="font:600 12px/1 var(--font-mono);color:var(--muted);min-height:18px;margin-top:8px;"></div>
+      </div>
+    </div>
     </div>
   </div>
 
@@ -316,6 +339,58 @@
       toast('수신자가 추가되었습니다.');
     } else {
       toast('추가 실패', 'err');
+    }
+  });
+
+  // ── DB stats + reset + 수집 설정 (STEP 3B-1) ────────────
+  async function loadDbStats() {
+    try {
+      const r = await adminFetch('/api/admin/db/stats');
+      const d = await r.json();
+      const lines = [`총 기사: ${d.total}건`];
+      d.distribution.forEach(x => {
+        lines.push(`  ${x.track || '-'} / ${x.classification || 'NULL'}: ${x.n}건`);
+      });
+      document.getElementById('dbStats').textContent = lines.join('\n');
+    } catch(e) { document.getElementById('dbStats').textContent = '통계 로드 실패'; }
+  }
+  loadDbStats();
+
+  // 현재 설정 채우기
+  adminFetch('/api/admin/settings').then(r => r.json()).then(s => {
+    document.getElementById('cfgDisplay').value  = s.naver_display_count ?? 20;
+    document.getElementById('cfgLookback').value = s.collection_lookback_days ?? 0;
+  });
+
+  document.getElementById('btnSaveCfg').addEventListener('click', async () => {
+    const body = {
+      naver_display_count:      parseInt(document.getElementById('cfgDisplay').value, 10) || 20,
+      collection_lookback_days: parseInt(document.getElementById('cfgLookback').value, 10) || 0,
+    };
+    const res = await adminFetch('/api/admin/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) toast('설정 저장 완료'); else toast('저장 실패', 'err');
+  });
+
+  document.getElementById('btnDbReset').addEventListener('click', async () => {
+    const ok = prompt('DB를 정말 리셋하려면 RESET 입력:');
+    if (ok !== 'RESET') { toast('취소됨', 'err'); return; }
+    const res = await adminFetch('/api/admin/db/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: 'RESET' }),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      document.getElementById('dbResult').textContent = `✅ ${d.deleted}건 삭제 완료`;
+      toast('DB 리셋 완료');
+      loadDbStats();
+    } else {
+      document.getElementById('dbResult').textContent = '❌ 리셋 실패';
+      toast('리셋 실패', 'err');
     }
   });
 })();
