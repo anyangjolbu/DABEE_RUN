@@ -1,4 +1,4 @@
-"""
+﻿"""
 DB CRUD 단일 진입점.
 
 STEP 4A-1: article_save에 track, tone_classification, tone_reason,
@@ -213,9 +213,12 @@ def recipient_list_all() -> list[dict]:
 def recipient_update(rid: int, **kwargs) -> bool:
     allowed = {
         "name", "role", "enabled",
+        "receive_monitor",          # STEP-3B-27 신규 (monitor 트랙 수신)
+        "receive_reference",        # reference 트랙 수신
+        "receive_daily_report",     # 일간 리포트 수신
+        # 레거시 컬럼 (무시되지만 PATCH 호환 위해 허용)
         "receive_tier1_warn", "receive_tier1_watch", "receive_tier1_good",
-        "receive_tier2", "receive_tier3", "receive_daily_report",
-        "receive_reference",
+        "receive_tier2", "receive_tier3",
     }
     fields = {k: v for k, v in kwargs.items() if k in allowed}
     if not fields:
@@ -243,23 +246,23 @@ def recipient_add(chat_id: str, name: str, role: str = "",
     sql = """
         INSERT INTO recipients (
             chat_id, name, role,
+            receive_monitor, receive_reference, receive_daily_report,
             receive_tier1_warn, receive_tier1_watch, receive_tier1_good,
-            receive_tier2, receive_tier3, receive_daily_report,
-            receive_reference,
+            receive_tier2, receive_tier3,
             enabled, created_at
-        ) VALUES (?,?,?, ?,?,?, ?,?,?, ?, 1, ?)
+        ) VALUES (?,?,?, ?,?,?, ?,?,?, ?,?, 1, ?)
     """
     try:
         with get_conn() as conn:
+            # STEP-3B-27: 신규 3종 권한만 운영. 레거시 컬럼은 monitor 값으로 함께 채움(롤백 안전).
+            mon   = int(perms.get("receive_monitor",      1))
+            ref   = int(perms.get("receive_reference",    1))
+            daily = int(perms.get("receive_daily_report", 1))
             cur = conn.execute(sql, (
                 chat_id, name, role,
-                perms.get("receive_tier1_warn",   1),
-                perms.get("receive_tier1_watch",  1),
-                perms.get("receive_tier1_good",   1),
-                perms.get("receive_tier2",        1),
-                perms.get("receive_tier3",        0),
-                perms.get("receive_daily_report", 1),
-                perms.get("receive_reference",    0),
+                mon, ref, daily,
+                mon, mon, mon,   # 레거시 tier1_warn/watch/good = monitor와 동일
+                mon, 0,          # 레거시 tier2 = monitor, tier3 = 0
                 created_at,
             ))
             return cur.lastrowid

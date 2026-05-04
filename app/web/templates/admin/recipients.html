@@ -1,4 +1,4 @@
-{% extends "admin/base_admin.html" %}
+﻿{% extends "admin/base_admin.html" %}
 {% block title %}수신자 관리{% endblock %}
 
 {% block content %}
@@ -49,13 +49,15 @@
       <div class="form-group">
         <label>수신 권한</label>
         <div class="perm-grid" style="margin-top:8px;">
-          <label class="perm-item"><input type="checkbox" id="pT1w"   checked /> TIER 1 경고</label>
-          <label class="perm-item"><input type="checkbox" id="pT1wa"  checked /> TIER 1 주의</label>
-          <label class="perm-item"><input type="checkbox" id="pT1g"   checked /> TIER 1 양호</label>
-          <label class="perm-item"><input type="checkbox" id="pT2"    checked /> TIER 2</label>
-          <label class="perm-item"><input type="checkbox" id="pT3"           /> TIER 3</label>
-          <label class="perm-item"><input type="checkbox" id="pDaily" checked /> 일간 리포트</label>
+          <label class="perm-item"><input type="checkbox" id="pMonitor"   checked /> 🔴 SK하이닉스 모니터링</label>
+          <label class="perm-item"><input type="checkbox" id="pReference" checked /> ⚪ 경쟁사·업계 참고</label>
+          <label class="perm-item"><input type="checkbox" id="pDaily"     checked /> 📋 일간 리포트</label>
         </div>
+        <p class="muted" style="font-size:12px;margin-top:8px;">
+          모니터링 = SK하이닉스 직접 기사 (분류 무관 전원 발송) ·
+          참고 = 경쟁사·업계 트렌드 ·
+          일간 = 매일 아침 종합 리포트
+        </p>
       </div>
 
       <div class="modal-actions">
@@ -70,3 +72,4 @@
 {% block scripts %}
 <script src="/static/js/admin/recipients.js"></script>
 {% endblock %}
+

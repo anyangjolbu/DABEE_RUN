@@ -1,4 +1,4 @@
-// app/web/static/js/admin/recipients.js
+﻿// app/web/static/js/admin/recipients.js
 // 수신자 목록 조회, 추가, 수정, 삭제 로직.
 
 let recipients = [];
@@ -29,12 +29,9 @@ function renderTable() {
       <td>${escapeHtml(r.role || '—')}</td>
       <td>
         <div class="perm-grid">
-          ${perm(r, 'receive_tier1_warn',  'T1경고')}
-          ${perm(r, 'receive_tier1_watch', 'T1주의')}
-          ${perm(r, 'receive_tier1_good',  'T1양호')}
-          ${perm(r, 'receive_tier2',       'T2')}
-          ${perm(r, 'receive_tier3',       'T3')}
-          ${perm(r, 'receive_daily_report','일간')}
+          ${perm(r, 'receive_monitor',     '🔴 모니터')}
+          ${perm(r, 'receive_reference',   '⚪ 참고')}
+          ${perm(r, 'receive_daily_report','📋 일간')}
         </div>
       </td>
       <td>
@@ -82,8 +79,13 @@ function renderTable() {
 }
 
 function perm(r, field, label) {
+  // STEP-3B-27: receive_monitor 컬럼 없는 구 레코드는 receive_tier1_warn 값으로 표시
+  let val = r[field];
+  if (field === 'receive_monitor' && (val === undefined || val === null)) {
+    val = r.receive_tier1_warn ?? 1;
+  }
   return `<label class="perm-item">
-    <input type="checkbox" data-perm="${field}" data-id="${r.id}" ${r[field] ? 'checked' : ''} />
+    <input type="checkbox" data-perm="${field}" data-id="${r.id}" ${val ? 'checked' : ''} />
     ${label}
   </label>`;
 }
@@ -125,12 +127,9 @@ document.addEventListener('DOMContentLoaded', () => {
       name:    document.getElementById('fName').value.trim(),
       role:    document.getElementById('fRole').value.trim(),
       permissions: {
-        receive_tier1_warn:   document.getElementById('pT1w').checked   ? 1 : 0,
-        receive_tier1_watch:  document.getElementById('pT1wa').checked  ? 1 : 0,
-        receive_tier1_good:   document.getElementById('pT1g').checked   ? 1 : 0,
-        receive_tier2:        document.getElementById('pT2').checked    ? 1 : 0,
-        receive_tier3:        document.getElementById('pT3').checked    ? 1 : 0,
-        receive_daily_report: document.getElementById('pDaily').checked ? 1 : 0,
+        receive_monitor:      document.getElementById('pMonitor').checked   ? 1 : 0,
+        receive_reference:    document.getElementById('pReference').checked ? 1 : 0,
+        receive_daily_report: document.getElementById('pDaily').checked     ? 1 : 0,
       },
     };
 
@@ -152,3 +151,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
