@@ -5,6 +5,7 @@
   let offset = 0, total = 0, pending = false;
   let currentTab = 'all';
   let allArticles = [];
+  let currentSearch = '';
 
   // ── Helpers ──────────────────────────────────────────────
   // theme_label에서 이모지/공백 제거
@@ -466,6 +467,7 @@ setInterval(loadSentiment, 90_000);
   // ── Init ─────────────────────────────────────────────────
   load(true);
 })();
+
 
 
 
