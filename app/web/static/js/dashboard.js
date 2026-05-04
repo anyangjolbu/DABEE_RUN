@@ -1,4 +1,4 @@
-// Public dashboard: hero sentiment, trend chart, article cards, section tabs.
+﻿// Public dashboard: hero sentiment, trend chart, article cards, section tabs.
 // STEP 4A-2 (옵션 A): tone_classification 기반 배지/필터 + reason 노출
 (function () {
   const LIMIT = 50;
@@ -134,7 +134,7 @@ function esc(s) {
   function renderCards() {
     const grid = document.getElementById('cardsGrid');
     grid.innerHTML = '';
-    const filtered = allArticles;  // 서버측 필터링으로 전환
+    const filtered = filterByTab(allArticles);  // 서버+클라이언트 이중 필터
     if (!filtered.length) {
       grid.innerHTML = '<div class="muted" style="grid-column:1/-1;text-align:center;padding:40px;">기사가 없습니다.</div>';
       return;

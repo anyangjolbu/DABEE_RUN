@@ -1,4 +1,4 @@
-# app/api/public.py
+﻿# app/api/public.py
 """
 공개 API 라우터. 인증 불필요.
 
@@ -48,15 +48,18 @@ async def list_articles(
     tier:   Optional[int] = Query(None),
     theme:  Optional[str] = Query(None),
     search: Optional[str] = Query(None),
-    tone:   Optional[str] = Query(None),
+    tone:           Optional[str] = Query(None),
+    classification: Optional[str] = Query(None),
+    track:          Optional[str] = Query(None),
 ):
     """기사 목록. tier/theme/search/tone 파라미터로 필터 가능."""
-    has_filter = any(v is not None for v in [tier, theme, search, tone])
+    has_filter = any(v is not None for v in [tier, theme, search, tone, classification, track])
 
     if has_filter:
         items, total = repository.article_filter(
             limit=limit, offset=offset,
             tier=tier, theme=theme, search=search, tone=tone,
+            classification=classification, track=track,
         )
     else:
         items = repository.article_recent(limit=limit, offset=offset)
