@@ -100,6 +100,9 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
   letter-spacing: .12em;
   font-size: 13px;
   text-transform: uppercase;
+  /* 텍스트는 정적 — 그림자/애니메이션 없음 */
+  text-shadow: none;
+  animation: none;
 }
 .app-nav a.live::before {
   content: "";
@@ -113,7 +116,7 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
   animation: liveDotPulse 1.8s var(--ease) infinite;
 }
 .app-nav a.live.is-running::before {
-  /* 수집 중: 펄스만 살짝 빨라짐 — 텍스트는 LIVE 유지 */
+  /* 수집 중: 점 펄스만 살짝 빨라짐 */
   animation-duration: 1.0s;
 }
 
@@ -1035,5 +1038,6 @@ table.rcp { width: 100%; border-collapse: collapse; }
 }
 .card-hostile .card-theme { background: #FEF2F2; color: #B91C1C; }
 .card-reference .card-theme { background: #F1F5F9; color: #475569; }
+
 
 
