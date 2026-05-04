@@ -94,66 +94,36 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 }
 .app-nav a { position: relative; }
 .app-nav a.live {
-  color: #ff2d2d;
+  color: #dc2626;
   padding-left: 18px;
-  font-weight: 900;
-  letter-spacing: .08em;
-  text-shadow:
-    0 0 4px  rgba(255, 60, 60, .9),
-    0 0 10px rgba(255, 30, 30, .7),
-    0 0 22px rgba(255, 0,  0,  .55);
-  animation: liveTextGlow 1.8s var(--ease) infinite;
+  font-weight: 800;
+  letter-spacing: .12em;
+  font-size: 13px;
+  text-transform: uppercase;
 }
 .app-nav a.live::before {
   content: "";
-  width: 9px; height: 9px;
+  width: 7px; height: 7px;
   border-radius: 50%;
-  background: #ff1f1f;
+  background: #dc2626;
   position: absolute;
   left: 0; top: 50%;
   transform: translateY(-50%);
-  box-shadow:
-    0 0 6px  rgba(255, 40, 40, .9),
-    0 0 14px rgba(255, 20, 20, .7),
-    0 0 24px rgba(255, 0,  0,  .55);
-  animation: liveDotPulse 1.4s var(--ease) infinite;
+  box-shadow: 0 0 0 0 rgba(220, 38, 38, .55);
+  animation: liveDotPulse 1.8s var(--ease) infinite;
 }
-.app-nav a.live.is-running {
-  /* 수집 중: 펄스만 약간 빨라짐, 텍스트는 LIVE 유지 */
-  animation-duration: 0.9s;
+.app-nav a.live.is-running::before {
+  /* 수집 중: 펄스만 살짝 빨라짐 — 텍스트는 LIVE 유지 */
+  animation-duration: 1.0s;
 }
-.app-nav a.live.is-running::before { animation-duration: 0.7s; }
 
 .app-nav a:not(.live):hover { color: var(--blue); }
 .app-nav a.active { color: var(--blue); }
 
 @keyframes liveDotPulse {
-  0%, 100% {
-    box-shadow:
-      0 0 6px  rgba(255, 40, 40, .9),
-      0 0 14px rgba(255, 20, 20, .7),
-      0 0 24px rgba(255, 0,  0,  .55);
-  }
-  50% {
-    box-shadow:
-      0 0 10px rgba(255, 40, 40, 1),
-      0 0 22px rgba(255, 20, 20, .9),
-      0 0 36px rgba(255, 0,  0,  .8);
-  }
-}
-@keyframes liveTextGlow {
-  0%, 100% {
-    text-shadow:
-      0 0 4px  rgba(255, 60, 60, .9),
-      0 0 10px rgba(255, 30, 30, .7),
-      0 0 22px rgba(255, 0,  0,  .55);
-  }
-  50% {
-    text-shadow:
-      0 0 6px  rgba(255, 80, 80, 1),
-      0 0 16px rgba(255, 40, 40, .95),
-      0 0 32px rgba(255, 0,  0,  .8);
-  }
+  0%   { box-shadow: 0 0 0 0   rgba(220, 38, 38, .55); }
+  70%  { box-shadow: 0 0 0 7px rgba(220, 38, 38, 0);   }
+  100% { box-shadow: 0 0 0 0   rgba(220, 38, 38, 0);   }
 }
 
 .topbar-icons { display: flex; gap: 14px; color: var(--ink-2); font-size: 22px; align-items: center; }
@@ -1065,4 +1035,5 @@ table.rcp { width: 100%; border-collapse: collapse; }
 }
 .card-hostile .card-theme { background: #FEF2F2; color: #B91C1C; }
 .card-reference .card-theme { background: #F1F5F9; color: #475569; }
+
 
