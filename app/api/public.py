@@ -1,14 +1,6 @@
 ﻿# app/api/public.py
 """
 공개 API 라우터. 인증 불필요.
-
-엔드포인트:
-    GET /api/health          : 헬스체크
-    GET /api/articles        : 기사 목록 (필터·검색·페이지네이션)
-    GET /api/themes          : 검색 테마 목록 (피드 필터용)
-    GET /api/scheduler       : 스케줄러 상태
-    GET /api/reports         : 일간 리포트 목록
-    GET /api/reports/{date}  : 특정 날짜 리포트 내용
 """
 
 from typing import Optional
@@ -43,17 +35,18 @@ async def health():
 
 @router.get("/articles")
 async def list_articles(
-    limit:  int           = Query(50, ge=1, le=200),
-    offset: int           = Query(0,  ge=0),
-    tier:   Optional[int] = Query(None),
-    theme:  Optional[str] = Query(None),
-    search: Optional[str] = Query(None),
+    limit:          int           = Query(50, ge=1, le=200),
+    offset:         int           = Query(0,  ge=0),
+    tier:           Optional[int] = Query(None),
+    theme:          Optional[str] = Query(None),
+    search:         Optional[str] = Query(None),
     tone:           Optional[str] = Query(None),
     classification: Optional[str] = Query(None),
     track:          Optional[str] = Query(None),
 ):
-    """기사 목록. tier/theme/search/tone 파라미터로 필터 가능."""
-    has_filter = any(v is not None for v in [tier, theme, search, tone, classification, track])
+    """기사 목록. tier/theme/search/tone/classification/track 필터."""
+    has_filter = any(v is not None for v in
+                     [tier, theme, search, tone, classification, track])
 
     if has_filter:
         items, total = repository.article_filter(
@@ -70,7 +63,6 @@ async def list_articles(
 
 @router.get("/themes")
 async def list_themes():
-    """검색 테마 목록 (공개용 — 라벨·티어만, 키워드 제외)."""
     themes = load_settings().get("search_themes", {})
     result = [
         {"id": tid, "label": t.get("label", tid), "tier": t.get("tier", 3)}
@@ -86,13 +78,11 @@ async def scheduler_status():
 
 @router.get("/reports")
 async def list_reports(limit: int = Query(30, ge=1, le=100)):
-    """일간 리포트 목록 (날짜 역순)."""
     return repository.report_list(limit=limit)
 
 
 @router.get("/reports/{date}")
 async def get_report(date: str):
-    """특정 날짜 리포트. date='today'면 오늘 날짜로 처리."""
     from datetime import datetime
     from app import config
     if date == "today":
@@ -105,15 +95,6 @@ async def get_report(date: str):
 
 @router.get("/dashboard/sentiment")
 async def dashboard_sentiment(days: int = Query(7, ge=1, le=30)):
-    """
-    오늘 NSS + N일치 추이.
-
-    응답 예:
-        {
-          "today":  {"date":"2026-05-03","score":33,"n":12,"good":8,"bad":4,...},
-          "trend":  [{"date":"2026-04-27","score":50,"n":10,...}, ...]
-        }
-    """
     return JSONResponse({
         "today": sentiment.sentiment_today(),
         "trend": sentiment.sentiment_trend(days=days),
