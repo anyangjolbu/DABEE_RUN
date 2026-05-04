@@ -1,4 +1,4 @@
-{% extends "admin/base_admin.html" %}
+﻿{% extends "admin/base_admin.html" %}
 {% set active = "dashboard" %}
 {% block title %}Dashboard{% endblock %}
 
@@ -132,6 +132,9 @@
 
         <hr style="margin:16px 0;border:none;border-top:1px solid var(--border);">
 
+        <button class="btn btn-primary" id="btnReanalyze" style="margin-bottom:8px;width:100%;">🔄 미분석/LLM에러 일괄 재분석</button>
+        <div id="reanalyzeResult" style="font:600 12px/1.4 var(--font-mono);color:var(--muted);min-height:18px;margin-bottom:12px;white-space:pre-line;"></div>
+        <hr style="margin:12px 0;border:none;border-top:1px solid var(--border);">
         <button class="btn btn-danger" id="btnDbReset">⚠️ DB 리셋 (articles + send_log 전체 삭제)</button>
         <div id="dbResult" style="font:600 12px/1 var(--font-mono);color:var(--muted);min-height:18px;margin-top:8px;"></div>
       </div>
@@ -407,6 +410,39 @@
     if (res.ok) toast('설정 저장 완료'); else toast('저장 실패', 'err');
   });
 
+  // ── 미분석/LLM에러 일괄 재분석 (STEP-3B-16) ─────────────
+  document.getElementById('btnReanalyze').addEventListener('click', async () => {
+    const btn = document.getElementById('btnReanalyze');
+    const out = document.getElementById('reanalyzeResult');
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = '⏳ 재분석 중... (최대 1~2분)';
+    out.textContent = '서버에서 Gemini 호출 중입니다. 잠시만 기다려주세요.';
+    try {
+      const res = await adminFetch('/api/admin/reanalyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 100 }),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const d = await res.json();
+      out.textContent =
+        `✅ 재분석 완료 (대상 ${d.target}건)\n` +
+        `  · 양호: ${d['양호'] ?? 0}건\n` +
+        `  · 비우호: ${d['비우호'] ?? 0}건\n` +
+        `  · 미분석: ${d['미분석'] ?? 0}건\n` +
+        `  · 에러: ${d['에러'] ?? 0}건`;
+      toast(`재분석 완료: 양호 ${d['양호']??0} / 비우호 ${d['비우호']??0}`);
+      loadDbStats();
+    } catch (e) {
+      out.textContent = '❌ 재분석 실패: ' + e.message;
+      toast('재분석 실패', 'err');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  });
+
   document.getElementById('btnDbReset').addEventListener('click', async () => {
     const ok = prompt('DB를 정말 리셋하려면 RESET 입력:');
     if (ok !== 'RESET') { toast('취소됨', 'err'); return; }
@@ -428,3 +464,4 @@
 })();
 </script>
 {% endblock %}
+
