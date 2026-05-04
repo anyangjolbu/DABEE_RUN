@@ -883,14 +883,11 @@ table.rcp { width: 100%; border-collapse: collapse; }
   .adgrid { grid-template-columns: 1fr; }
 }
 @media (max-width: 860px) {
-  .topbar { height: auto; padding: 14px 0; }
-  .topbar-inner { flex-direction: column; align-items: flex-start; }
   .app-nav { gap: 16px; }
   .hero-left { padding: 28px 24px; }
   .hero-title { font-size: 38px; }
   .hero-bottom, .sentiment-summary { grid-template-columns: 1fr 1fr; }
   .cards-grid, .feed-cards .cards-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .section-bar-inner { flex-direction: column; align-items: flex-start; }
   .admin-layout { grid-template-columns: 1fr; }
   .admin-sidebar { position: static; height: auto; }
   .keywords-grid { grid-template-columns: 1fr; }
@@ -1118,30 +1115,6 @@ table.rcp { width: 100%; border-collapse: collapse; }
 
 
 
-/* ─── 모바일 대응 (STEP-3B-25, 안전 버전) ───────────────────── */
-@media (max-width: 860px) {
-  /* Hero 1컬럼만 변경 — topbar/section-bar는 건드리지 않음 */
-  .hero { grid-template-columns: 1fr; min-height: auto; }
-  .hero-left { padding: 28px 22px; }
-  .hero-right { padding: 22px; }
-  .hero-title { font-size: 32px; line-height: 1.1; }
-  .hero-desc { font-size: 15px; margin-top: 12px; }
-  .hero-meta { font-size: 12px; gap: 12px; margin-top: 14px; }
-  .hero-bottom { gap: 8px; }
-  .mini-stat { padding: 12px; }
-  .mini-stat b { font-size: 22px; }
 
-  .trend-head h3 { font-size: 18px; }
-  .index-chip b { font-size: 26px; }
-  .summary-box .value { font-size: 20px; }
 
-  .cards-grid { grid-template-columns: 1fr; gap: 14px; }
-}
 
-@media (max-width: 480px) {
-  .hero-title { font-size: 26px; }
-  .hero-bottom { grid-template-columns: 1fr 1fr; }
-  .hero-bottom .mini-stat:nth-child(3) { grid-column: 1 / -1; }
-  .summary-box { padding: 12px; }
-  .summary-box .value { font-size: 18px; }
-}
