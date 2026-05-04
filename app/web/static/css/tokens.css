@@ -139,6 +139,18 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 }
 .icon-btn:hover { background: #f1f5f9; }
 
+.topbar-credit {
+  font: 600 11px/1 var(--font-mono);
+  letter-spacing: .08em;
+  color: var(--muted);
+  white-space: nowrap;
+  padding-right: 4px;
+  user-select: none;
+}
+@media (max-width: 720px) {
+  .topbar-credit { display: none; }
+}
+
 /* ─── Hero ───────────────────────────────────────────────── */
 .hero-wrap { background: var(--surface); border-bottom: 1px solid var(--line); }
 .hero { display: grid; grid-template-columns: 1.1fr 1fr; min-height: 360px; }
@@ -1095,6 +1107,7 @@ table.rcp { width: 100%; border-collapse: collapse; }
 }
 .card-hostile .card-theme { background: #FEF2F2; color: #B91C1C; }
 .card-reference .card-theme { background: #F1F5F9; color: #475569; }
+
 
 
 
