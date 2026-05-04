@@ -118,8 +118,8 @@ function esc(s) {
 
   // 탭 → API 쿼리 파라미터 변환
   function tabToQuery(tab) {
-    if (tab === 'hostile')   return '&classification=비우호';
-    if (tab === 'normal')    return '&classification=양호';
+    if (tab === 'hostile')   return '&classification=비우호&track=monitor';
+    if (tab === 'normal')    return '&classification=양호&track=monitor';
     if (tab === 'reference') return '&track=reference';
     return '';
   }
@@ -432,3 +432,4 @@ setInterval(loadSentiment, 90_000);
   // ── Init ─────────────────────────────────────────────────
   load(true);
 })();
+
