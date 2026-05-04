@@ -300,3 +300,25 @@ async def get_logs(
     if raw:
         return JSONResponse({"lines": raw_lines[-limit:]})
     return JSONResponse({"lines": parsed})
+
+
+# ── 미분석/LLM에러 일괄 재분석 (STEP-3B-16) ──────────────────────
+
+@router.post("/reanalyze")
+async def reanalyze(request: Request, _: AdminDep):
+    """
+    미분석/LLM에러 monitor 레코드 일괄 재분석.
+    body: {"limit": 50}  (기본 50, 최대 200)
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    limit = int(body.get("limit", 50))
+    limit = max(1, min(200, limit))
+
+    from app.services.reanalyze import reanalyze_unanalyzed
+    import asyncio
+    # 동기 함수를 워커 스레드에서 실행 → 이벤트 루프 블로킹 방지
+    result = await asyncio.to_thread(reanalyze_unanalyzed, limit)
+    return result

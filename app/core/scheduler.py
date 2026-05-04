@@ -159,6 +159,19 @@ class Scheduler:
             })
             # 동기 함수를 워커 스레드에서 실행 → 이벤트 루프 블로킹 방지
             result = await asyncio.to_thread(pipeline.run_once)
+            # STEP-3B-16: 파이프라인 종료 후 미분석/LLM에러 30건씩 자동 재분석
+            try:
+                from app.services.reanalyze import reanalyze_unanalyzed
+                reanalyze_result = await asyncio.to_thread(reanalyze_unanalyzed, 30)
+                if reanalyze_result["target"] > 0:
+                    logger.info(
+                        f"🔄 자동 재분석: 양호 {reanalyze_result['양호']} / "
+                        f"비우호 {reanalyze_result['비우호']} / "
+                        f"미분석 {reanalyze_result['미분석']} / "
+                        f"에러 {reanalyze_result['에러']}"
+                    )
+            except Exception as e:
+                logger.warning(f"⚠️ 자동 재분석 실패(무시): {e}")
             self.last_result  = result
             self.last_run_at  = datetime.now(config.KST)
             self.cycle_count += 1
@@ -180,3 +193,4 @@ class Scheduler:
 
 # ── 전역 인스턴스 ────────────────────────────────────────────
 scheduler = Scheduler()
+
