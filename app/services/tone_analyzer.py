@@ -160,7 +160,7 @@ def _call_gemini(client, model: str, prompt: str) -> tuple[str, str]:
         model=model,
         contents=prompt,
         config=types.GenerateContentConfig(
-            max_output_tokens=2000,
+            max_output_tokens=8000,
             temperature=0,
             response_mime_type="application/json",
             response_schema=TONE_RESPONSE_SCHEMA,
@@ -184,19 +184,44 @@ def _call_gemini(client, model: str, prompt: str) -> tuple[str, str]:
 
 
 def _parse_response(raw: str) -> Optional[dict]:
-    """Gemini raw 응답을 파싱. 실패 시 None."""
+    """Gemini raw 응답을 파싱. 실패 시 None.
+
+    MAX_TOKENS 등으로 응답이 잘려 unterminated string이 발생한 경우,
+    필수 필드(classification, confidence)가 추출되면 reason은 잘린 부분까지
+    살려서 부분 복구를 시도한다.
+    """
     if not raw:
         return None
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
-        # 종종 ```json ... ``` 으로 감싸서 오는 경우 방어
+        # 1차 방어: ```json ... ``` 으로 감싸서 오는 경우
         m = re.search(r"\{[\s\S]*\}", raw)
         if m:
             try:
                 return json.loads(m.group(0))
             except Exception:
-                return None
+                pass
+        # 2차 방어: 잘린 JSON에서 핵심 필드를 정규식으로 추출
+        cls_m    = re.search(r'"classification"\s*:\s*"([^"]+)"', raw)
+        conf_m   = re.search(r'"confidence"\s*:\s*"([^"]+)"', raw)
+        # reason은 잘렸을 가능성이 있으므로 끝까지 비탐욕 매칭 시도
+        reason_m = re.search(r'"reason"\s*:\s*"((?:[^"\\]|\\.)*)', raw)
+        if cls_m:
+            reason_text = reason_m.group(1) if reason_m else ""
+            if reason_text:
+                reason_text = reason_text + " (응답 잘림)"
+            else:
+                reason_text = "(응답 잘림 — 자동 복구)"
+            recovered = {
+                "classification":    cls_m.group(1),
+                "reason":            reason_text,
+                "confidence":        conf_m.group(1) if conf_m else "low",
+                "hostile_sentences": [],
+                "total_sentences":   0,
+            }
+            logger.warning("  🩹 JSON 잘림 → 핵심 필드만 복구 사용")
+            return recovered
         return None
 
 
@@ -324,3 +349,4 @@ def analyze_tone(article: dict, theme_label: str, settings: dict) -> dict:
         f"비우호문장 {len(hostile)}/{total} | {reason[:50]}"
     )
     return result
+
