@@ -1,5 +1,66 @@
-# 개발 이력 (HISTORY)
+﻿# 개발 이력 (HISTORY)
 
+## 2026-05-04 — STEP-3B-26: 모바일 화면 깨짐 해결 (sticky topbar 부풀림 제거)
+- **무엇을**: tokens.css의 `@media (max-width: 860px)` 블록에서 `.topbar { height: auto }`, `.topbar-inner { flex-direction: column; align-items: flex-start }`, `.section-bar-inner { flex-direction: column }` 3개 라인 제거. STEP-3B-24/25에서 추가됐던 중복 모바일 미디어쿼리 정리. 캐시 버스팅 `?v=5g`로 통일. base.html에 임시로 박았던 진단 스크립트(STEP-3B-26 진단) 제거.
+- **왜**: 화면 폭을 정확히 860px 이하로 줄이면 hero·section-bar·카드 영역이 통째로 사라지는 치명적 결함 발생. 데스크톱 풀스크린에서도 카드가 안 보이고 모바일에서는 파란 hero가 잠깐 떴다가 사라짐. 원인 추적 결과 기존 원본 CSS의 모바일 미디어쿼리에 `.topbar { height: auto }`와 `.topbar-inner { flex-direction: column }`가 있어서, sticky topbar 안 로고/네비/credit/햄버거가 세로로 쌓이며 topbar 높이가 100px+로 부풀어 그 아래 콘텐츠를 시각적으로 가리는 현상이었음. STEP-3B-22~24에서 검색창/크레딧 추가하면서 더 악화됨.
+- **어떻게**: 추측 패치 대신 base.html에 임시 진단 스크립트(요소별 `getBoundingClientRect` + `getComputedStyle` 우상단 빨간 박스 출력)를 박아 실측 시도. 진단 스크립트가 첫 시도에 안 박힌 이유는 dashboard.html이 base.html을 extends라 `</body>`가 dashboard 쪽엔 없기 때문. base.html로 위치 옮긴 뒤 PowerShell `Get-Content | Select-Object -Skip 880 -First 30`로 882~898줄 미디어쿼리 직접 검사 → 범인 라인 3개 정확히 식별 후 라인 단위 제거.
+- **검증**: 로컬 `uvicorn app.main:app --reload`로 화면 폭 859px 이하에서 hero·트렌드·카드 모두 정상 표시 확인. `Select-String -Pattern "topbar.*height:\s*auto|topbar-inner.*flex-direction:\s*column"` 출력 없음. 캐시 버전 `v=5g` 일관 적용.
+- **남은 일**: 동일 미디어쿼리 블록의 `.feed-toolbar { top: 0 }`, `.admin-sidebar { position: static; height: auto }`도 잠재 위험 있어 추후 모니터링 필요. Gemini 응답 잘림 문제 검증 및 모델 교체(`gemini-flash-lite`) 검토는 별도 STEP으로.
+
+## 2026-05-04 — STEP-3B-24~25: (실패→롤백) 모바일 종합 대응 시도
+- **무엇을**: 모바일 폭에서 hero 1컬럼 스택, 카드 1컬럼, topbar 높이 자동 조정을 한 번에 추가하려는 미디어쿼리 블록 두 차례 추가. 결과적으로 STEP-3B-26에서 위험 라인만 제거하는 방식으로 통합 정리.
+- **왜**: 모바일 사용자가 hero가 1.1fr+1fr 그리드라 비좁게 보인다는 피드백.
+- **어떻게**: STEP-3B-24에서 `@media (max-width: 860px)` 블록을 추가했으나 원본 CSS에 이미 동일 폭의 미디어쿼리가 있다는 사실을 인지하지 못함. STEP-3B-25에서 "안전 버전"으로 교체 시도했지만 정규식 매칭 실패로 중복만 늘어남.
+- **검증**: 둘 다 화면 깨짐 발생 → STEP-3B-26으로 역추적·정리.
+- **남은 일**: 작업 시작 전 원본 미디어쿼리 그렙(`Select-String "@media.*max-width"`) 선행하는 워크플로 정착.
+
+## 2026-05-04 — STEP-3B-23: 상단바에 "제작/배포 우장한 TL" 크레딧 라벨 추가
+- **무엇을**: base.html의 topbar-icons 영역에 `<span class="topbar-credit">제작/배포 : 우장한 TL</span>` 추가. tokens.css에 Pretendard 12px 500 weight, `#94a3b8` 회색 스타일 정의. 720px 이하에서 자동 숨김.
+- **왜**: 누가 만든 시스템인지 표기해 달라는 요청.
+- **어떻게**: 햄버거 메뉴 좌측에 인접 배치, `padding-right: 6px`로 간격 확보, `user-select: none`으로 드래그 방지.
+- **검증**: 데스크톱 풀스크린에서 상단 우측 햄버거 좌측에 "제작/배포 : 우장한 TL" 표시.
+- **남은 일**: 모바일에서는 공간 부족으로 숨김 처리, 향후 햄버거 드롭다운 안에 노출 가능.
+
+## 2026-05-04 — STEP-3B-22: 메인 대시보드 섹션바에 기사 검색창 추가
+- **무엇을**: dashboard.html section-bar에 `<input id="sectionSearch">` + 클리어 버튼(`sectionSearchClear`) 추가. dashboard.js에 `currentSearch` 변수와 300ms 디바운스 입력 핸들러 추가, `tabToQuery()`에 `&search=` 파라미터 전달. tokens.css에 검색창 둥근 pill 스타일 + focus 링 추가. ESC 키와 ✕ 버튼으로 즉시 리셋.
+- **왜**: 피드 페이지에만 있던 검색 기능을 메인에서도 사용하고 싶다는 요청. 카드 양이 늘어나며 특정 키워드로 빠르게 좁힐 필요.
+- **어떻게**: 백엔드 `/api/articles`는 이미 `search` 파라미터 지원하므로 추가 변경 불필요. 탭 + 검색 교집합 동작(예: 비우호 탭 + "성과급" 검색)은 `tabToQuery()`에서 자연스럽게 결합.
+- **검증**: "성과급" 입력 시 카드 즉시 필터링, 비우호 탭 + 검색어 교집합 정상, ESC/✕ 리셋 정상.
+- **사이드 이펙트**: 이 작업 중 PowerShell 치환에서 `currentSearch` 선언 줄이 한 차례 누락되어 `tabToQuery()`에서 ReferenceError 발생, 카드가 통째로 안 뜨는 사고 → 동일 PowerShell 패치 재적용으로 즉시 복구.
+- **남은 일**: 모바일에서 검색창이 줄바꿈되는 720px 미디어쿼리는 STEP-3B-26 정리 시 함께 점검.
+
+## 2026-05-04 — STEP-3B-20~21: LIVE 표시 디자인 개선 + 텔레그램 발송 정책 변경
+- **무엇을**: (1) LIVE 표시를 "수집 중"으로 토글되는 동작에서 항상 정적 빨강(`#dc2626`) + 좌측 점에만 ripple 펄스 애니메이션으로 변경. 텍스트 자체는 `text-shadow: none; animation: none`. (2) `recipient_filter.py` monitor 트랙 분기에서 분류(비우호/양호/미분석) 무관하게 `receive_tier1_warn=1` 수신자 전원 발송으로 단순화.
+- **왜**: (1) 라이브 텍스트가 펄스/네온으로 함께 빛나니 어지럽고 "짜친다"는 피드백. (2) 모니터링 대상 기사인데 "양호" 또는 "미분석"이면 텔레그램이 안 가서 PR팀이 놓치는 케이스 발생. 분류는 정보 표기용일 뿐 발송 결정 기준에서 빼야 함.
+- **어떻게**: (1) `.app-nav a.live::before`만 `liveDotPulse` 1.8s 애니메이션, 본체 `a.live`는 색상·패딩만 유지. (2) `match_recipients()` monitor 분기 — 기존 `if cls == "비우호"`/`elif cls == "일반"` 조건 분기 삭제, `receive_tier1_warn=1` 수신자 전체 반환.
+- **검증**: 메인 화면에서 LIVE 텍스트는 정적, 점만 부드럽게 펄스. 다음 파이프라인 실행 시 양호/미분석 monitor 기사도 텔레그램으로 발송됨 (배지로 분류는 메시지 본문에 표시).
+- **남은 일**: 양호/미분석 발송 볼륨이 과도하면 수신자별 opt-out 플래그 추가 검토.
+
+## 2026-05-04 — STEP-3B-19: 라이브 표시 1차 디자인 (네온 → 차분한 펄스)
+- **무엇을**: LIVE 글자에 처음 적용했던 강한 네온 글로우(다중 `text-shadow` + 흐릿한 ripple)를 제거하고 점만 펄스하는 형태로 1차 정리. STEP-3B-21에서 텍스트도 정적으로 굳히기 전 단계.
+- **왜**: 첫 시도의 빛번짐이 "짜친다"는 피드백. 세련된 정적 표시를 거쳐 최종 STEP-3B-21로 수렴.
+- **어떻게**: `text-shadow` 강도 단계적 축소.
+- **검증**: 화면 진입 시 깜빡임 없이 정적 표시.
+
+## 2026-05-04 — STEP-3B-18: DABEE RUN 로고 클릭 시 홈/관리자 새로고침
+- **무엇을**: base.html과 base_admin.html의 `<h1 class="logo">`를 `<a href="/" class="logo-link">` 또는 `/admin`으로 감싸 로고 클릭 시 메인 페이지로 이동·새로고침되도록 변경.
+- **왜**: 다른 페이지에서 메인으로 돌아가는 명확한 경로가 없어 사용자 혼선.
+- **어떻게**: `aria-label="DABEE RUN 홈"` 부여, 텍스트 색상은 inherit로 기존 그라디언트 유지.
+- **검증**: 로고 클릭 시 `/` 또는 `/admin`으로 정상 이동.
+
+## 2026-05-04 — STEP-3B-17: Gemini 응답 잘림(JSONDecodeError) 해결
+- **무엇을**: `tone_analyzer.py`에서 `max_output_tokens=2000` → `8000`으로 증가. `_parse_response()`를 강화해 normal `json.loads` 실패 시 markdown 코드블록 추출 → 그래도 실패 시 정규식으로 `classification`/`confidence`/`reason` 직접 추출하고 reason 끝에 "(응답 잘림 — 자동 복구)" 표기. fallback dict 반환 + 경고 로그.
+- **왜**: production에서 다수 기사가 `JSONDecodeError: Unterminated string starting at line 3 column 13 (char 40~42)`로 3회 재시도 후 LLM에러 처리되는 현상. `gemini-flash-latest`가 한국어 응답에서 토큰 한도에 도달, JSON `"reason"` 필드 중간에서 잘려 닫는 따옴표·중괄호 누락. `gemini-flash-lite-latest`에서는 정상 작동했다는 비교 단서.
+- **어떻게**: 1차 token 한도 상향, 2차 잘린 응답에서도 결정적 필드(분류·신뢰도)는 살리는 회복 로직. reason 길이 제한은 사용자가 "잘 되고 있는 거 건드리지 말자"고 해서 보류.
+- **검증**: 어드민 "🔄 미분석/LLM에러 일괄 재분석" 버튼 실행 후 Live Log에서 `JSONDecodeError` 빈도 감소, `🩹 JSON 잘림 → classification만 복구 사용` 경고로 폴백 동작 확인.
+- **남은 일**: 잔존 LLM에러가 여전히 많으면 `gemini-flash-lite-latest`로 모델 교체 검토.
+
+## 2026-05-04 — STEP-3B-16: 어드민 대시보드에 "미분석/LLM에러 일괄 재분석" 버튼
+- **무엇을**: `app/api/admin.py`에 `POST /api/admin/reanalyze` 엔드포인트 추가 — `tone_classification IN ('미분석','LLM에러')`인 기사 N건(기본 100)을 재호출. admin/dashboard.html에 파란색 "🔄 미분석/LLM에러 일괄 재분석" 버튼 + 결과 패널(`reanalyzeResult`) 추가, JS로 버튼 클릭 → 비활성화 → POST → 결과 카운트(양호/비우호/미분석/에러) 표시 → DB stats 자동 reload.
+- **왜**: 일시적 Gemini 장애로 LLM에러가 누적되면 운영자가 손으로 다시 돌릴 방법이 없었음.
+- **어떻게**: 백엔드는 이미 존재하는 `tone_analyzer.analyze_tone()` 재사용, 기사 본문이 비어 있으면 description으로 폴백, 결과 dict로 4가지 카운트 집계 후 반환.
+- **검증**: 버튼 클릭 → 1~2분 대기 후 LLM에러 총수가 `/api/articles?classification=LLM에러`로 ~65 → ~30~40 감소. 토스트 알림 정상.
+- **남은 일**: STEP-3B-17의 응답 잘림 패치와 결합해 잔존 LLM에러 추가 감소 측정.
 ## 2026-05-04 — STEP-3B-13: tier 시스템 제거, track 단일 분기로 통일
 - **무엇을**: settings DEFAULT에서 `tier`, `tone_analysis` 필드 삭제, 관리자 키워드 페이지(keywords.html/js)의 TIER 1/2/3 셀렉트·배지를 monitor/reference 트랙 토글로 교체, base_admin/CSS 캐시버스팅 `?v=4d`, settings_store의 `schedule_interval_min` → `schedule_interval_minutes` 통일(scheduler.py와 키 일치).
 - **왜**: STEP 4A-1에서 track 도입 후 tier 필드는 의미를 잃었지만 UI에 잔존. 운영자가 새 테마를 추가할 때 무엇을 골라야 할지 혼란을 유발. 또한 `schedule_interval_min` vs `_minutes` 키 불일치로 관리자 UI 변경값이 스케줄러에 반영 안 되는 잠복 버그.
@@ -125,3 +186,4 @@
 - **남은 일**: STEP 1 → 4 순차 진행.
 
 <!-- 새 항목은 맨 위에 추가 -->
+
