@@ -606,10 +606,11 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 .log-filter-btn.on { color: #0b1220; background: var(--sky); border-color: var(--sky); }
 
 .log-box {
-  height: 380px; overflow-y: auto;
+  height: 480px; overflow-y: auto;
   font: 500 12.5px/1.7 var(--font-mono);
   background: #070d1a;
   padding: 14px 18px;
+  word-break: break-word;
 }
 .log-line { display: grid; grid-template-columns: 80px 56px 1fr; gap: 12px; padding: 1px 0; }
 .log-line .lt  { color: #64748b; }
@@ -617,8 +618,23 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
 .log-line.info .lvl { color: #94a3b8; }
 .log-line.warn .lvl { color: #fbbf24; }
 .log-line.err  .lvl { color: #f87171; }
-.log-line .msg { color: #cbd5e1; }
+.log-line .msg { color: #cbd5e1; white-space: pre-wrap; }
 .log-line.err  .msg { color: #fecaca; }
+/* 과거 로그는 약간 흐리게 */
+.log-line.history { opacity: .65; }
+.log-line.history .lvl { opacity: .8; }
+/* 구분선 */
+.log-sep {
+  text-align: center;
+  color: #475569;
+  font: 700 10px/2 var(--font-mono);
+  letter-spacing: .2em;
+  border-top: 1px dashed #1e293b;
+  border-bottom: 1px dashed #1e293b;
+  margin: 8px 0;
+  padding: 4px 0;
+}
+.log-sep.live { color: var(--sky); border-color: #1d4ed8; }
 
 /* Actions */
 .actions { display: flex; flex-direction: column; gap: 8px; }

@@ -19,15 +19,19 @@
     POST /api/admin/scheduler/stop     : 스케줄러 정지
 """
 
+import os
+import re
 import secrets
 from datetime import datetime, timedelta
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.responses import JSONResponse
 
 from app import config
 from app.core import repository as repo
 from app.core.scheduler import scheduler
+from app.core.ws_manager import WSLogHandler
 from app.services.settings_store import load_settings, save_settings
 
 router = APIRouter()
@@ -213,3 +217,86 @@ async def db_stats(_: AdminDep):
         """).fetchall()
     dist = [{"track": r["track"], "classification": r["tone_classification"], "n": r["n"]} for r in rows]
     return {"total": total, "distribution": dist}
+
+
+# ── 라이브 로그 — 과거분 tail (STEP-3B-15) ─────────────────────
+
+# monitor.log 라인 파서: "2026-05-04 00:27:13 [INFO] app.services.pipeline — 메시지"
+_LOG_LINE_RE = re.compile(
+    r"^(?P<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+"
+    r"\[(?P<level>[A-Z]+)\]\s+"
+    r"(?P<logger>[^—-]+?)\s+[—-]\s+"
+    r"(?P<message>.*)$"
+)
+
+
+def _tail_log_file(path: str, n_lines: int, max_bytes: int = 512 * 1024) -> list[str]:
+    """파일 끝에서 최대 n_lines줄 효율적으로 읽기.
+
+    한 줄 평균 길이를 가정해 max_bytes만큼만 읽고 마지막 N줄을 자릅니다.
+    1.8MB 파일에서 300줄 추출은 수백 ms 이내.
+    """
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            if size == 0:
+                return []
+            read_size = min(size, max(max_bytes, n_lines * 400))
+            f.seek(size - read_size)
+            data = f.read()
+    except Exception:
+        return []
+
+    text = data.decode("utf-8", errors="replace")
+    if size > read_size:
+        # 잘렸을 수 있는 첫 줄 버림
+        nl = text.find("\n")
+        if nl >= 0:
+            text = text[nl + 1:]
+    raw_lines = [ln for ln in text.split("\n") if ln.strip()]
+    return raw_lines[-n_lines:]
+
+
+def _is_blacklisted(logger_name: str) -> bool:
+    """WS 로그 핸들러와 동일한 노이즈 필터를 과거 로그에도 적용."""
+    for blocked in WSLogHandler.WS_LOG_BLACKLIST:
+        if logger_name.startswith(blocked):
+            return True
+    return False
+
+
+@router.get("/logs")
+async def get_logs(
+    _: AdminDep,
+    limit:    int  = Query(300, ge=10, le=2000),
+    raw:      bool = Query(False, description="True면 파싱 없이 원문 반환"),
+    no_filter:bool = Query(False, description="True면 노이즈 블랙리스트 무시"),
+):
+    """monitor.log 끝에서 N줄을 파싱해 반환. WS 라이브 로그의 과거분."""
+    raw_lines = _tail_log_file(str(config.LOG_PATH), limit * 2)  # 필터로 줄어들 여유
+
+    parsed: list[dict] = []
+    for ln in raw_lines:
+        m = _LOG_LINE_RE.match(ln)
+        if not m:
+            # 멀티라인 메시지의 후속 줄 — 직전 메시지에 이어붙임
+            if parsed:
+                parsed[-1]["message"] += "\n" + ln
+            continue
+        logger_name = m.group("logger").strip()
+        if not no_filter and _is_blacklisted(logger_name):
+            continue
+        parsed.append({
+            "time":    m.group("time"),
+            "level":   m.group("level"),
+            "logger":  logger_name,
+            "message": m.group("message"),
+        })
+
+    parsed = parsed[-limit:]
+    if raw:
+        return JSONResponse({"lines": raw_lines[-limit:]})
+    return JSONResponse({"lines": parsed})

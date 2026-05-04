@@ -203,22 +203,54 @@
 
   // ── Live log ────────────────────────────────────────────
   const logBox = document.getElementById('logBox');
-  function addLog(time, level, msg) {
+  const LOG_MAX = 1500; // 과거분 + 라이브 누적 보관
+  function levelClass(lv) {
+    return ({ INFO: 'info', WARNING: 'warn', WARN: 'warn', ERROR: 'err' }[lv] || 'info');
+  }
+  function addLog(time, level, msg, opts) {
     const div = document.createElement('div');
-    div.className = `log-line ${level}`;
-    div.innerHTML = `<span class="lt">${time}</span><span class="lvl">${level}</span><span class="msg">${escHtml(msg)}</span>`;
+    div.className = `log-line ${level}` + (opts?.history ? ' history' : '');
+    div.innerHTML = `<span class="lt">${escHtml(time)}</span><span class="lvl">${level}</span><span class="msg">${escHtml(msg)}</span>`;
     if (logFilter && !div.classList.contains(logFilter)) div.style.display = 'none';
     logBox.appendChild(div);
-    while (logBox.childElementCount > 500) logBox.removeChild(logBox.firstChild);
-    logBox.scrollTop = logBox.scrollHeight;
+    while (logBox.childElementCount > LOG_MAX) logBox.removeChild(logBox.firstChild);
+    if (!opts?.skipScroll) logBox.scrollTop = logBox.scrollHeight;
   }
   function nowTime() {
     const d = new Date(), p = n => String(n).padStart(2, '0');
     return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
   }
+
+  // 과거 로그 history 로드 (페이지 진입 시 1회)
+  async function loadLogHistory() {
+    try {
+      const res  = await adminFetch('/api/admin/logs?limit=500');
+      if (!res.ok) return;
+      const data = await res.json();
+      const lines = data.lines || [];
+      if (!lines.length) return;
+      const sep = document.createElement('div');
+      sep.className = 'log-sep';
+      sep.textContent = `── 이전 로그 ${lines.length}건 ──`;
+      logBox.appendChild(sep);
+      lines.forEach(l => {
+        const time = (l.time || '').slice(11) || '--:--:--';
+        addLog(time, levelClass(l.level || 'INFO'), l.message || '',
+               { history: true, skipScroll: true });
+      });
+      const live = document.createElement('div');
+      live.className = 'log-sep live';
+      live.textContent = '── ↓ 라이브 ──';
+      logBox.appendChild(live);
+      logBox.scrollTop = logBox.scrollHeight;
+    } catch (e) {
+      console.error('[admin] 로그 히스토리 로드 실패', e);
+    }
+  }
+  loadLogHistory();
+
   window.addEventListener('dabee:log', (e) => {
-    const level = { INFO: 'info', WARNING: 'warn', ERROR: 'err' }[e.detail.level] || 'info';
-    addLog(nowTime(), level, e.detail.message);
+    addLog(nowTime(), levelClass(e.detail.level), e.detail.message);
   });
 
   // ── Scheduler ───────────────────────────────────────────
