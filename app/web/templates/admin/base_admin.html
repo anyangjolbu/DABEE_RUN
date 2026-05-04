@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
@@ -8,16 +8,18 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/tokens.css?v=4d" />
+  <link rel="stylesheet" href="/static/css/tokens.css?v=5a" />
   {% block head %}{% endblock %}
 </head>
 <body class="admin-body">
   <div class="admin-layout">
 
     <aside class="admin-sidebar">
-      <div class="sidebar-logo">
-        <span class="dabee">DABEE</span><span class="run">RUN</span>
-      </div>
+      <a href="/admin" class="sidebar-logo-link" aria-label="Admin 대시보드">
+        <div class="sidebar-logo">
+          <span class="dabee">DABEE</span><span class="run">RUN</span>
+        </div>
+      </a>
 
       <nav class="sidebar-nav">
         <a href="/admin"            class="{% if active == 'dashboard'  %}active{% endif %}">▣ Dashboard</a>
@@ -45,3 +47,5 @@
   {% block scripts %}{% endblock %}
 </body>
 </html>
+
+

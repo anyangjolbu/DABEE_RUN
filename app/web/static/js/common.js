@@ -1,12 +1,12 @@
-// common.js — WebSocket connection + global event dispatch (all public pages).
+﻿// common.js — WebSocket connection + global event dispatch (all public pages).
 (function () {
   let ws = null;
 
-  // Update the LIVE nav indicator
+  // Update the LIVE nav indicator (텍스트는 항상 LIVE 유지, 펄스 강도만 변경)
   function setLive(running) {
     const liveEl = document.getElementById('navLive');
     if (!liveEl) return;
-    liveEl.textContent = running ? '● 수집중' : 'LIVE';
+    liveEl.classList.toggle('is-running', !!running);
   }
 
   function connect() {
@@ -41,3 +41,4 @@
 
   connect();
 })();
+

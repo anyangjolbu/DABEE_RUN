@@ -1,4 +1,4 @@
-/* ─── Design Tokens ─────────────────────────────────────── */
+﻿/* ─── Design Tokens ─────────────────────────────────────── */
 :root {
   --bg: #f4f5f7;
   --surface: #fff;
@@ -93,21 +93,68 @@ button { font: inherit; color: inherit; cursor: pointer; background: none; borde
   flex-wrap: wrap;
 }
 .app-nav a { position: relative; }
-.app-nav a.live { color: #dc2626; padding-left: 16px; }
+.app-nav a.live {
+  color: #ff2d2d;
+  padding-left: 18px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-shadow:
+    0 0 4px  rgba(255, 60, 60, .9),
+    0 0 10px rgba(255, 30, 30, .7),
+    0 0 22px rgba(255, 0,  0,  .55);
+  animation: liveTextGlow 1.8s var(--ease) infinite;
+}
 .app-nav a.live::before {
   content: "";
-  width: 8px; height: 8px;
+  width: 9px; height: 9px;
   border-radius: 50%;
-  background: #dc2626;
+  background: #ff1f1f;
   position: absolute;
   left: 0; top: 50%;
   transform: translateY(-50%);
-  animation: pulseRed 1.4s var(--ease) infinite;
+  box-shadow:
+    0 0 6px  rgba(255, 40, 40, .9),
+    0 0 14px rgba(255, 20, 20, .7),
+    0 0 24px rgba(255, 0,  0,  .55);
+  animation: liveDotPulse 1.4s var(--ease) infinite;
 }
+.app-nav a.live.is-running {
+  /* 수집 중: 펄스만 약간 빨라짐, 텍스트는 LIVE 유지 */
+  animation-duration: 0.9s;
+}
+.app-nav a.live.is-running::before { animation-duration: 0.7s; }
+
 .app-nav a:not(.live):hover { color: var(--blue); }
 .app-nav a.active { color: var(--blue); }
 
-@keyframes pulseRed { 50% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); } }
+@keyframes liveDotPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 6px  rgba(255, 40, 40, .9),
+      0 0 14px rgba(255, 20, 20, .7),
+      0 0 24px rgba(255, 0,  0,  .55);
+  }
+  50% {
+    box-shadow:
+      0 0 10px rgba(255, 40, 40, 1),
+      0 0 22px rgba(255, 20, 20, .9),
+      0 0 36px rgba(255, 0,  0,  .8);
+  }
+}
+@keyframes liveTextGlow {
+  0%, 100% {
+    text-shadow:
+      0 0 4px  rgba(255, 60, 60, .9),
+      0 0 10px rgba(255, 30, 30, .7),
+      0 0 22px rgba(255, 0,  0,  .55);
+  }
+  50% {
+    text-shadow:
+      0 0 6px  rgba(255, 80, 80, 1),
+      0 0 16px rgba(255, 40, 40, .95),
+      0 0 32px rgba(255, 0,  0,  .8);
+  }
+}
 
 .topbar-icons { display: flex; gap: 14px; color: var(--ink-2); font-size: 22px; align-items: center; }
 .icon-btn {
@@ -1018,3 +1065,4 @@ table.rcp { width: 100%; border-collapse: collapse; }
 }
 .card-hostile .card-theme { background: #FEF2F2; color: #B91C1C; }
 .card-reference .card-theme { background: #F1F5F9; color: #475569; }
+

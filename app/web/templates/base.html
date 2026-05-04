@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/tokens.css?v=4c" />
+  <link rel="stylesheet" href="/static/css/tokens.css?v=5a" />
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -16,7 +16,7 @@
   <header class="topbar">
     <div class="container topbar-inner">
       <div class="brand">
-        <h1 class="logo"><span class="dabee">DABEE</span><span class="run">RUN</span></h1>
+        <a href="/" class="logo-link" aria-label="DABEE RUN 홈"><h1 class="logo"><span class="dabee">DABEE</span><span class="run">RUN</span></h1></a>
         <nav class="app-nav">
           <a class="live" href="/" id="navLive">LIVE</a>
           <a href="/feed" class="{% if active == 'feed' %}active{% endif %}">피드</a>
@@ -33,7 +33,9 @@
 
   <div class="toast-wrap" id="toastWrap"></div>
 
-  <script src="/static/js/common.js?v=4c"></script>
+  <script src="/static/js/common.js?v=5a"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>
+
+
