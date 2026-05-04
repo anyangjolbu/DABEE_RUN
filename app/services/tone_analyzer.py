@@ -1,4 +1,4 @@
-"""
+﻿"""
 톤 분류 (모니터링 트랙 전용).
 
 STEP 4A-1 + STEP-3B-11 + STEP-3B-12:
@@ -142,7 +142,7 @@ RETRY_MAX = 3
 def _llm_error_result(detail: str) -> dict:
     """Gemini 호출/파싱 N회 실패 시 명시적 LLM에러 분류로 저장."""
     return {
-        "classification":    "LLM에러",
+        "classification":    "미분석",
         "reason":            f"LLM 응답 실패: {detail}",
         "confidence":        "n/a",
         "hostile_sentences": [],
