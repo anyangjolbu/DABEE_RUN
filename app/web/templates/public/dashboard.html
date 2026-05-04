@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}DABEE Run — SK하이닉스 뉴스 모니터링{% endblock %}
 
 {% block content %}
@@ -103,6 +103,12 @@
       <span class="tab" data-tab="normal">양호</span>
       <span class="tab" data-tab="reference">경쟁사 참고</span>
     </div>
+    <div class="section-search">
+      <span class="section-search-icon" aria-hidden="true">⌕</span>
+      <input type="search" id="sectionSearch" class="section-search-input"
+             placeholder="기사 제목·요약 검색…" autocomplete="off" />
+      <button class="section-search-clear hidden" id="sectionSearchClear" aria-label="검색 초기화">✕</button>
+    </div>
     <div class="section-date" id="sectionDate">—</div>
   </div>
 </section>
@@ -124,5 +130,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/dashboard.js?v=4c"></script>
+<script src="/static/js/dashboard.js?v=5d"></script>
 {% endblock %}
+
+

@@ -116,12 +116,16 @@ function esc(s) {
     });
   });
 
-  // 탭 → API 쿼리 파라미터 변환
+  // 탭 → API 쿼리 파라미터 변환 (검색어 포함)
   function tabToQuery(tab) {
-    if (tab === 'hostile')   return '&classification=비우호&track=monitor';
-    if (tab === 'normal')    return '&classification=양호&track=monitor';
-    if (tab === 'reference') return '&track=reference';
-    return '';
+    let q = '';
+    if (tab === 'hostile')        q = '&classification=비우호&track=monitor';
+    else if (tab === 'normal')    q = '&classification=양호&track=monitor';
+    else if (tab === 'reference') q = '&track=reference';
+    if (currentSearch) {
+      q += '&search=' + encodeURIComponent(currentSearch);
+    }
+    return q;
   }
 
   function filterByTab(items) {
@@ -429,8 +433,39 @@ setInterval(loadSentiment, 90_000);
     }
   });
 
+  // ── Section search (STEP-3B-22) ──────────────────────────
+  const searchInput = document.getElementById('sectionSearch');
+  const searchClear = document.getElementById('sectionSearchClear');
+  if (searchInput) {
+    let searchTimer = null;
+    searchInput.addEventListener('input', () => {
+      const v = searchInput.value.trim();
+      searchClear.classList.toggle('hidden', !v);
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        if (v === currentSearch) return;
+        currentSearch = v;
+        load(true);
+      }, 300);  // 디바운스 300ms
+    });
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        searchInput.value = '';
+        searchClear.classList.add('hidden');
+        if (currentSearch) { currentSearch = ''; load(true); }
+      }
+    });
+    searchClear.addEventListener('click', () => {
+      searchInput.value = '';
+      searchClear.classList.add('hidden');
+      if (currentSearch) { currentSearch = ''; load(true); }
+      searchInput.focus();
+    });
+  }
+
   // ── Init ─────────────────────────────────────────────────
   load(true);
 })();
+
 
 
