@@ -112,9 +112,17 @@ function esc(s) {
       document.querySelectorAll('.section-tabs .tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       currentTab = tab.dataset.tab;
-      renderCards();
+      load(true);   // 서버에서 새로 로드
     });
   });
+
+  // 탭 → API 쿼리 파라미터 변환
+  function tabToQuery(tab) {
+    if (tab === 'hostile')   return '&classification=비우호';
+    if (tab === 'normal')    return '&classification=양호';
+    if (tab === 'reference') return '&track=reference';
+    return '';
+  }
 
   function filterByTab(items) {
     if (currentTab === 'hostile')   return items.filter(a => a.tone_classification === '비우호' && (a.track || 'monitor') === 'monitor');
@@ -126,7 +134,7 @@ function esc(s) {
   function renderCards() {
     const grid = document.getElementById('cardsGrid');
     grid.innerHTML = '';
-    const filtered = filterByTab(allArticles);
+    const filtered = allArticles;  // 서버측 필터링으로 전환
     if (!filtered.length) {
       grid.innerHTML = '<div class="muted" style="grid-column:1/-1;text-align:center;padding:40px;">기사가 없습니다.</div>';
       return;
@@ -142,7 +150,7 @@ function esc(s) {
     pending = true;
     if (reset) { offset = 0; allArticles = []; }
     try {
-      const res  = await fetch(`/api/articles?limit=${LIMIT}&offset=${offset}`);
+      const qs = tabToQuery(currentTab); const res = await fetch(`/api/articles?limit=${LIMIT}&offset=${offset}${qs}`);
       const data = await res.json();
       total   = data.total;
       offset += data.items.length;
