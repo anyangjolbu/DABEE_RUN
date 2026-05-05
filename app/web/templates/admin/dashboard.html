@@ -144,6 +144,22 @@
 
 </div>
 
+
+    <!-- STEP-3B-35: settings.json 진단 -->
+    <div class="panel" style="margin-top:18px" id="settingsInspectCard">
+      <div class="panel-head">
+        <h3>Settings 진단</h3>
+        <span class="sub">data/settings.json</span>
+        <div class="ml-auto" style="display:flex;gap:6px;">
+          <button class="btn btn-sm" id="btnInspectReload">새로고침</button>
+          <button class="btn btn-sm" id="btnInspectCopy">JSON 복사</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div id="inspectMeta" style="font:600 11px/1.4 var(--font-mono);color:var(--muted);margin-bottom:8px;white-space:pre-wrap;">불러오는 중…</div>
+        <pre id="inspectPre" style="max-height:360px;overflow:auto;background:#0f172a;color:#e2e8f0;padding:12px;border-radius:8px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-all;margin:0;">—</pre>
+      </div>
+    </div>
 <!-- Add recipient modal -->
 <div class="modal-backdrop hidden" id="addModal">
   <div class="modal">
@@ -462,6 +478,50 @@
       toast('리셋 실패', 'err');
     }
   });
+})();
+</script>
+
+<script>
+/* STEP-3B-35: settings.json 진단 패널 */
+(function(){
+  const metaEl = document.getElementById('inspectMeta');
+  const preEl  = document.getElementById('inspectPre');
+  const btnR   = document.getElementById('btnInspectReload');
+  const btnC   = document.getElementById('btnInspectCopy');
+  if(!metaEl || !preEl) return;
+  let lastJson = '';
+
+  async function load(){
+    metaEl.textContent = '불러오는 중…';
+    preEl.textContent = '—';
+    try{
+      const r = await fetch('/api/admin/settings/inspect', {credentials:'same-origin'});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const d = await r.json();
+      const meta = [
+        'path: ' + d.path,
+        'exists: ' + d.exists,
+        d.size_bytes !== null ? ('size: ' + d.size_bytes + ' B') : '',
+        d.mtime_kst ? ('mtime: ' + d.mtime_kst + ' KST') : '',
+        d.parse_error ? ('parse_error: ' + d.parse_error) : ''
+      ].filter(Boolean).join('  ·  ');
+      metaEl.textContent = meta;
+      lastJson = d.parsed ? JSON.stringify(d.parsed, null, 2) : (d.raw_preview || '');
+      preEl.textContent = lastJson || '(empty)';
+    }catch(e){
+      metaEl.textContent = '로드 실패: ' + e.message;
+    }
+  }
+  btnR && btnR.addEventListener('click', load);
+  btnC && btnC.addEventListener('click', async function(){
+    if(!lastJson) return;
+    try{
+      await navigator.clipboard.writeText(lastJson);
+      btnC.textContent = '복사됨';
+      setTimeout(function(){ btnC.textContent = 'JSON 복사'; }, 1200);
+    }catch(_){}
+  });
+  load();
 })();
 </script>
 {% endblock %}

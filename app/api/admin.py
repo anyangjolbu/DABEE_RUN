@@ -1,4 +1,4 @@
-# app/api/admin.py
+﻿# app/api/admin.py
 """
 관리자 API 라우터.
 
@@ -322,3 +322,62 @@ async def reanalyze(request: Request, _: AdminDep):
     # 동기 함수를 워커 스레드에서 실행 → 이벤트 루프 블로킹 방지
     result = await asyncio.to_thread(reanalyze_unanalyzed, limit)
     return result
+
+# ──────────────────────────────────────────────────────────
+# STEP-3B-35: settings.json 진단용 조회
+# ──────────────────────────────────────────────────────────
+import json as _json_inspect
+
+_SENSITIVE_PATTERNS = ("_key", "_secret", "_token", "password", "api_key")
+
+
+def _mask_sensitive(obj):
+    """재귀적으로 민감 키 값을 마스킹."""
+    if isinstance(obj, dict):
+        out = {}
+        for k, v in obj.items():
+            kl = str(k).lower()
+            if any(p in kl for p in _SENSITIVE_PATTERNS) and isinstance(v, str) and v:
+                out[k] = "***MASKED***"
+            else:
+                out[k] = _mask_sensitive(v)
+        return out
+    if isinstance(obj, list):
+        return [_mask_sensitive(x) for x in obj]
+    return obj
+
+
+@router.get("/settings/inspect")
+async def inspect_settings_file(_: AdminDep):
+    """운영 디스크의 data/settings.json 실제 내용을 진단용으로 조회.
+    민감 키는 자동 마스킹. 수정은 PATCH /api/admin/settings 사용.
+    """
+    p = str(config.SETTINGS_PATH)
+    info = {
+        "path": p,
+        "exists": os.path.exists(p),
+        "size_bytes": None,
+        "mtime_kst": None,
+        "parsed": None,
+        "parse_error": None,
+        "raw_preview": None,
+    }
+    if not info["exists"]:
+        return info
+
+    try:
+        st = os.stat(p)
+        info["size_bytes"] = st.st_size
+        info["mtime_kst"] = datetime.fromtimestamp(st.st_mtime, config.KST).strftime("%Y-%m-%d %H:%M:%S")
+        with open(p, "r", encoding="utf-8") as f:
+            raw = f.read()
+        info["raw_preview"] = raw[:200]
+        try:
+            parsed = _json_inspect.loads(raw)
+            info["parsed"] = _mask_sensitive(parsed)
+        except _json_inspect.JSONDecodeError as e:
+            info["parse_error"] = f"{type(e).__name__}: {e}"
+    except Exception as e:
+        info["parse_error"] = f"{type(e).__name__}: {e}"
+
+    return info
