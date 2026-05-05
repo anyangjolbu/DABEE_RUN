@@ -1,4 +1,4 @@
-# app/core/ws_manager.py
+﻿# app/core/ws_manager.py
 """
 WebSocket 연결 관리 + 실시간 로그 브로드캐스트.
 
@@ -78,6 +78,9 @@ class WSLogHandler(logging.Handler):
         "app.core.ws_manager",  # 자기 자신
     )
 
+    # 메인 asyncio 루프 참조 (attach_ws_log_handler에서 주입)
+    main_loop: "asyncio.AbstractEventLoop | None" = None
+
     def emit(self, record: logging.LogRecord) -> None:
         try:
             # 블랙리스트 로거는 WS로 안 보냄
@@ -90,21 +93,32 @@ class WSLogHandler(logging.Handler):
                 "level":   record.levelname,
                 "message": msg,
             }
+            # 1순위: 현재 스레드에 running loop이 있으면 그대로 사용 (메인 비동기 컨텍스트)
             try:
                 loop = asyncio.get_running_loop()
-            except RuntimeError:
-                # 동기 컨텍스트 → 스킵
+                loop.create_task(manager.broadcast(payload))
                 return
-            loop.create_task(manager.broadcast(payload))
+            except RuntimeError:
+                pass
+            # 2순위: 워커 스레드(파이프라인 등)에서 호출된 경우 → 메인 루프로 thread-safe 전송
+            loop = WSLogHandler.main_loop
+            if loop is not None and loop.is_running():
+                asyncio.run_coroutine_threadsafe(manager.broadcast(payload), loop)
         except Exception:
             pass
 
 
 def attach_ws_log_handler() -> None:
-    """루트 로거에 WebSocket 핸들러를 추가. 앱 시작 시 1회 호출."""
+    """루트 로거에 WebSocket 핸들러를 추가. 앱 시작 시 1회 호출 (lifespan 내부)."""
     handler = WSLogHandler()
     handler.setFormatter(logging.Formatter(
         "%(asctime)s [%(levelname)s] %(name)s — %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     ))
+    # STEP-3B-30: 워커 스레드(asyncio.to_thread)에서 발생하는 로그도 WS로 흘리기 위해
+    # 메인 asyncio 루프를 핸들러 클래스 변수에 저장.
+    try:
+        WSLogHandler.main_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        WSLogHandler.main_loop = None
     logging.getLogger().addHandler(handler)
