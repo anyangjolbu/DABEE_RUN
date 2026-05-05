@@ -1,5 +1,25 @@
 ﻿# 개발 이력 (HISTORY)
 
+## 2026-05-04 — STEP-3B-29: 상단 네비에서 '피드' 링크 제거
+- **무엇을**: base.html의 상단 네비게이션에서 `<a href="/feed">피드</a>` 링크만 제거. `/feed` 라우트(`app/main.py`), `feed.html`, `feed.js`는 보존.
+- **왜**: 메인 대시보드(섹션 탭 + 검색창)가 피드 페이지의 모든 기능을 흡수해 사용자 동선상 피드 탭이 중복. 다만 추후 운영 변화로 복원 가능성을 열어두기 위해 라우트와 파일은 남김.
+- **어떻게**: 메뉴 링크 한 줄만 PowerShell `-replace`로 삭제. 직접 URL `/feed` 입력 시에는 여전히 접근 가능.
+- **검증**: 메인/리포트/관리자 페이지 어디서도 상단 네비에 "피드" 보이지 않음. `https://.../feed` 직접 접속 시 정상 렌더링.
+- **남은 일**: 일정 기간 운영 후 복원 요구 없으면 라우트와 파일도 정리 검토.
+
+## 2026-05-04 — STEP-3B-28: 메인 hero 우측 sentiment summary 라벨 '참고' → '미분석' 정정
+- **무엇을**: dashboard.html의 sentiment-summary 세 번째 박스 라벨을 "참고 / 경쟁사·미분석"에서 "미분석 / 분류 대기·LLM 에러"로 변경.
+- **왜**: 해당 박스의 값(`sumNeut`)은 dashboard.js에서 `unkPct`(monitor 트랙의 미분석 비율)로 채워지는데, 라벨이 "참고"였어서 reference 트랙(경쟁사) 기사 비율로 오해됨. 실제 reference 트랙은 섹션바 "경쟁사 참고" 탭에서 별도 확인 가능.
+- **어떻게**: HTML 라벨/sub 텍스트만 변경, JS 로직과 ID는 그대로 유지(`sumNeut` 그대로).
+- **검증**: 메인 우측 박스 3개가 "양호 / 비우호 / 미분석"으로 일관되게 표시.
+- **남은 일**: 추후 reference 트랙 카운트를 별도 박스로 노출할지 검토.
+
+## 2026-05-04 — STEP-3B-27: 수신자 권한 모델을 monitor/reference/daily 3종으로 단순화
+- **무엇을**: `recipients` 테이블에 `receive_monitor` 컬럼 신설(DEFAULT 1). `recipient_filter.py`의 monitor 분기를 `receive_monitor` 기준으로 교체. 어드민 수신자 관리 UI 권한 체크박스를 6개(T1경고/T1주의/T1양호/T2/T3/일간)에서 3개(🔴 SK하이닉스 모니터링 / ⚪ 경쟁사·업계 참고 / 📋 일간 리포트)로 축소. 기존 수신자 전원의 `receive_reference`를 일괄 1로 켜는 마이그레이션 포함. 레거시 컬럼(`receive_tier1_warn` 등)은 DB 보존하되 코드에서 무시.
+- **왜**: STEP-3B-13에서 티어 시스템이 폐기됐고 STEP-3B-20에서 monitor 트랙은 분류 무관 일괄 발송으로 변경됐는데, 어드민 UI는 여전히 6개 티어 기반 체크박스를 노출 중이었음. 운영자가 "양호만 빼고 받기" 같은 세부 조정을 체크해도 코드는 그걸 무시하는 거짓 약속 상태. 또한 `receive_reference` 옵션은 어드민 UI에 아예 없어서 DB 수동 수정 외에는 reference 트랙 발송 권한을 부여할 방법이 없었음.
+- **어떻게**: (1) `models.py`에 `receive_monitor` ALTER 마이그레이션 + `create_all()` 끝에서 백필 SQL(`COALESCE(receive_tier1_warn, 1)`) 실행. (2) `repository.py`의 `recipient_add`/`recipient_update`에 `receive_monitor` 추가, `recipient_add` INSERT에서 신규 3종 권한만 운영하되 레거시 컬럼은 monitor 값과 동일하게 함께 채워 롤백 안전성 확보. (3) `recipients.html`/`recipients.js`에서 권한 체크박스 6개를 3개로 교체, 추가 모달 payload에서 신규 3종만 전송. (4) reference 일괄 ON 마이그레이션은 `UPDATE recipients SET receive_reference = 1 WHERE receive_reference = 0` 한 번만 실행되도록 멱등 처리.
+- **검증**: 어드민 → 수신자 관리에서 권한 칸이 "🔴 모니터 / ⚪ 참고 / 📋 일간" 3개 배지로 표시. "+ 수신자 추가" 모달 권한 영역도 3개 체크박스로 단순화. 다음 파이프라인 사이클부터 monitor 트랙은 `receive_monitor=1`, reference 트랙은 `receive_reference=1` 기준으로 발송.
+- **남은 일**: 일정 기간 안정 운영 후 레거시 컬럼(`receive_tier1_warn`, `receive_tier1_watch`, `receive_tier1_good`, `receive_tier2`, `receive_tier3`) 완전 DROP 검토. 발송 볼륨이 부담스러운 수신자가 생기면 `receive_monitor_hostile_only` 옵션 추가 고려.
 ## 2026-05-04 — STEP-3B-26: 모바일 화면 깨짐 해결 (sticky topbar 부풀림 제거)
 - **무엇을**: tokens.css의 `@media (max-width: 860px)` 블록에서 `.topbar { height: auto }`, `.topbar-inner { flex-direction: column; align-items: flex-start }`, `.section-bar-inner { flex-direction: column }` 3개 라인 제거. STEP-3B-24/25에서 추가됐던 중복 모바일 미디어쿼리 정리. 캐시 버스팅 `?v=5g`로 통일. base.html에 임시로 박았던 진단 스크립트(STEP-3B-26 진단) 제거.
 - **왜**: 화면 폭을 정확히 860px 이하로 줄이면 hero·section-bar·카드 영역이 통째로 사라지는 치명적 결함 발생. 데스크톱 풀스크린에서도 카드가 안 보이고 모바일에서는 파란 hero가 잠깐 떴다가 사라짐. 원인 추적 결과 기존 원본 CSS의 모바일 미디어쿼리에 `.topbar { height: auto }`와 `.topbar-inner { flex-direction: column }`가 있어서, sticky topbar 안 로고/네비/credit/햄버거가 세로로 쌓이며 topbar 높이가 100px+로 부풀어 그 아래 콘텐츠를 시각적으로 가리는 현상이었음. STEP-3B-22~24에서 검색창/크레딧 추가하면서 더 악화됨.
@@ -186,4 +206,5 @@
 - **남은 일**: STEP 1 → 4 순차 진행.
 
 <!-- 새 항목은 맨 위에 추가 -->
+
 
