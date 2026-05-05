@@ -1,4 +1,4 @@
-# app/services/crawler.py
+﻿# app/services/crawler.py
 """
 기사 본문 + 대표 이미지 크롤링.
 
@@ -57,7 +57,7 @@ USER_AGENT = (
 )
 
 MIN_BODY_LEN = 150
-MAX_BODY_LEN = 2500
+MAX_BODY_LEN = 4000  # STEP-3B-37: summarizer BODY_LIMIT(4000)과 정합
 TIMEOUT      = 10
 
 # 트래킹 픽셀·아이콘·광고 차단 패턴

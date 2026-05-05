@@ -23,6 +23,22 @@ MAX_OUTPUT_TOKEN = 1024   # 한국어 5~6문장 + thinking 토큰 여유
 BODY_LIMIT       = 4000
 
 
+def _strip_markdown(text: str) -> str:
+    """STEP-3B-37: 모델이 가끔 마크다운/글머리표로 응답하는 경우 평문화."""
+    if not text:
+        return text
+    # bold/italic, inline code 마커 제거
+    t = re.sub(r"\*\*+", "", text)
+    t = re.sub(r"`+", "", t)
+    # 헤딩 라인 (#, ##, ### ...) 의 # 만 제거 (내용 유지)
+    t = re.sub(r"(?m)^\s*#{1,6}\s*", "", t)
+    # 라인 시작의 글머리표(*, -, •, ㆍ, ▪, ■, 1., 2.) 제거
+    t = re.sub(r"(?m)^\s*(?:[\*\-\u2022\u30FB\u25AA\u25A0]|\d+\.)\s+", "", t)
+    # 연속 공백·빈 줄 정리
+    t = re.sub(r"\n{3,}", "\n\n", t)
+    return t.strip()
+
+
 def _clean(text: str) -> str:
     return re.sub(r"<[^>]+>", "", text or "").strip()
 
@@ -63,7 +79,7 @@ def summarize(article: dict, settings: dict) -> str:
                 temperature=0.3,
             ),
         )
-        summary = (resp.text or "").strip()
+        summary = _strip_markdown((resp.text or "").strip())  # STEP-3B-37
 
         # 잘림 진단
         try:
