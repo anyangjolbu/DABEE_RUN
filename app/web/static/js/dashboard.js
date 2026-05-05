@@ -181,8 +181,8 @@ function esc(s) {
     load(true);
   });
 
-  // ── Sentiment computation (NSS, monitor 트랙 기준) ─────────
-// NSS = (양호 - 비우호) / (양호 + 비우호) × 100, 범위 -100~+100
+  // ── Sentiment computation (PR Index, monitor 트랙 기준) ─────────
+// PR Index = (양호 - 비우호) / (양호 + 비우호) × 100, 범위 -100~+100
 async function loadSentiment() {
   try {
     const res  = await fetch('/api/dashboard/sentiment?days=7');
@@ -262,7 +262,7 @@ function renderHero(today) {
   const hh = String(now.getHours()).padStart(2, '0');
   const mm = String(now.getMinutes()).padStart(2, '0');
   document.getElementById('heroMeta').innerHTML =
-    `<span>NSS = (양호−비우호)/(양호+비우호)×100</span>` +
+    `<span>PR Index = (양호−비우호)/(양호+비우호)×100</span>` +
     `<span>분석 ${n}건</span>` +
     `<span>업데이트 ${hh}:${mm} KST</span>`;
 
@@ -274,7 +274,7 @@ function renderHero(today) {
   document.getElementById('sectionDate').textContent = today_kst;
 }
 
-// ── 7일 차트 (NSS 선 + 양호/비우호 막대 복합) ─────────────────
+// ── 7일 차트 (PR Index 선 + 양호/비우호 막대 복합) ─────────────────
 function renderTrendChart(trend) {
   // viewBox: 520 × 200, 중앙선 y=90 (=0점), 위 +100, 아래 -100
   const W = 520, H = 200, padX = 30, padY = 40;
