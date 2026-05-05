@@ -274,6 +274,7 @@ def analyze_tone(article: dict, theme_label: str, settings: dict) -> dict:
 - 부정 단어가 있어도 결론이 긍정이면 양호
 - 부정이 회사가 아닌 시장/제품 일반에 향하면 양호
 - hostile_sentences는 최대 {HOSTILE_LIMIT}개까지만 인용 (가장 강한 것 우선)
+- reason은 130자 이내(공백·문장부호 포함). 한국어 평문 1~2 문장으로 핵심만. 마크다운·따옴표 인용·"~합니다" 같은 군더더기 금지.
 
 기사:
 {content}"""

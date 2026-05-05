@@ -1,0 +1,655 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DABEE Run — Report Mockup</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/web.css" />
+<style>
+  :root {
+    --bg: #F7F8FA;
+    --surface: #FFFFFF;
+    --surface-2: #F2F4F7;
+    --line: #E5E7EB;
+    --line-2: #EEF1F5;
+    --text: #0B1220;
+    --text-2: #4B5563;
+    --text-3: #6B7280;
+    --muted: #9CA3AF;
+    --brand: #2563EB;
+    --brand-2: #1D4ED8;
+    --brand-soft: #EFF4FF;
+    --good: #10B981;
+    --good-soft: #ECFDF5;
+    --warn: #EF4444;
+    --warn-soft: #FEF2F2;
+    --neutral: #6B7280;
+    --neutral-soft: #F3F4F6;
+    --radius: 14px;
+    --radius-sm: 10px;
+    --shadow-sm: 0 1px 2px rgba(15,23,42,.04);
+    --shadow: 0 4px 16px rgba(15,23,42,.06);
+    --font-sans: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .tnum { font-family: var(--font-mono); font-feature-settings: 'tnum'; letter-spacing: -0.01em; }
+
+  /* ── Topbar ───────────────────────────────────── */
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(255,255,255,.85);
+    backdrop-filter: saturate(160%) blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .container { width: min(1280px, calc(100% - 48px)); margin: 0 auto; }
+  .topbar-inner {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 64px;
+  }
+  .logo {
+    font-family: var(--font-mono); font-weight: 700;
+    font-size: 18px; letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  .logo .accent { color: var(--brand); }
+  .nav { display: flex; gap: 28px; }
+  .nav a {
+    text-decoration: none; color: var(--text-2);
+    font-size: 13px; font-weight: 500;
+    padding: 8px 0; border-bottom: 2px solid transparent;
+  }
+  .nav a.active { color: var(--text); border-bottom-color: var(--brand); }
+  .topbar-meta {
+    display: flex; align-items: center; gap: 14px;
+    font-size: 12px; color: var(--text-3);
+  }
+  .dot-live { width: 6px; height: 6px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 4px rgba(16,185,129,.15); }
+
+  /* ── Page header ─────────────────────────────── */
+  .page-header {
+    padding: 36px 0 20px;
+  }
+  .crumb { font-size: 12px; color: var(--text-3); margin-bottom: 8px; }
+  .page-title {
+    font-size: 28px; font-weight: 700; letter-spacing: -0.02em;
+    margin: 0 0 6px;
+  }
+  .page-subtitle { color: var(--text-3); font-size: 14px; margin: 0; }
+
+  /* ── Sub tabs ────────────────────────────────── */
+  .subtabs {
+    display: inline-flex; padding: 4px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: var(--shadow-sm);
+    margin: 16px 0 24px;
+  }
+  .subtab {
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-size: 13px; font-weight: 500;
+    color: var(--text-3);
+    cursor: pointer;
+    transition: all .15s ease;
+  }
+  .subtab .meta { font-family: var(--font-mono); font-size: 11px; opacity: .7; margin-left: 6px; }
+  .subtab.active {
+    background: var(--text);
+    color: #fff;
+  }
+  .subtab.active .meta { opacity: .65; }
+
+  /* ── KPI strip ───────────────────────────────── */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px; background: var(--brand);
+  }
+  .kpi.good::before { background: var(--good); }
+  .kpi.warn::before { background: var(--warn); }
+  .kpi.neutral::before { background: var(--muted); }
+  .kpi-label {
+    font-size: 12px; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: 0.04em;
+    font-weight: 500;
+  }
+  .kpi-value {
+    font-size: 32px; font-weight: 700;
+    margin: 6px 0 4px; letter-spacing: -0.02em;
+  }
+  .kpi-delta {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12px; font-weight: 500;
+    padding: 2px 8px; border-radius: 999px;
+  }
+  .kpi-delta.up { color: var(--good); background: var(--good-soft); }
+  .kpi-delta.down { color: var(--warn); background: var(--warn-soft); }
+  .kpi-delta.flat { color: var(--text-3); background: var(--neutral-soft); }
+  .kpi-sub { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+
+  /* ── Section ─────────────────────────────────── */
+  .section {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .section-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .section-title {
+    font-size: 15px; font-weight: 600; letter-spacing: -0.01em;
+    margin: 0;
+  }
+  .section-sub { font-size: 12px; color: var(--text-3); }
+
+  /* ── AI summary ─────────────────────────────── */
+  .ai-card {
+    background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+    color: #E5E7EB;
+    border: none;
+  }
+  .ai-card .section-title { color: #fff; }
+  .ai-card .section-sub { color: rgba(255,255,255,.55); }
+  .ai-tag {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.08em;
+    padding: 3px 8px; border-radius: 999px;
+    background: rgba(96,165,250,.15);
+    color: #93C5FD;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+  .ai-body p {
+    margin: 0 0 12px;
+    font-size: 14px; line-height: 1.7;
+    color: #E5E7EB;
+  }
+  .ai-body p:last-child { margin-bottom: 0; }
+  .ai-body strong { color: #fff; font-weight: 600; }
+  .ai-body em.up { color: #6EE7B7; font-style: normal; }
+  .ai-body em.down { color: #FCA5A5; font-style: normal; }
+
+  /* ── Trend chart ─────────────────────────────── */
+  .trend-grid {
+    display: grid; grid-template-columns: 2fr 1fr; gap: 20px;
+  }
+  .chart-wrap {
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+  }
+  svg.chart { display: block; width: 100%; height: 240px; }
+  .legend-row {
+    display: flex; gap: 20px; margin-top: 12px;
+    font-size: 12px; color: var(--text-3);
+  }
+  .legend-row .legend { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .swatch { width: 10px; height: 10px; border-radius: 2px; }
+
+  .stat-list {
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .stat-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px;
+    background: var(--surface-2);
+    border-radius: var(--radius-sm);
+  }
+  .stat-row .label {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; color: var(--text-2);
+  }
+  .stat-row .value { font-family: var(--font-mono); font-weight: 600; font-size: 14px; }
+  .swatch { width: 8px; height: 8px; border-radius: 50%; }
+  .swatch.good { background: var(--good); }
+  .swatch.warn { background: var(--warn); }
+  .swatch.neutral { background: var(--muted); }
+  .swatch.brand { background: var(--brand); }
+
+  /* ── Hot issue ──────────────────────────────── */
+  .issue-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+  }
+  .issue {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    background: var(--surface);
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .issue:hover { border-color: var(--brand); box-shadow: var(--shadow-sm); }
+  .issue-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .pill {
+    font-size: 11px; font-weight: 500;
+    padding: 3px 9px; border-radius: 999px;
+    letter-spacing: 0;
+  }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .pill.good { background: var(--good-soft); color: var(--good); }
+  .pill.neutral { background: var(--neutral-soft); color: var(--text-2); }
+  .issue-count { font-family: var(--font-mono); font-size: 12px; color: var(--text-3); }
+  .issue-title {
+    font-size: 14px; font-weight: 600;
+    margin: 0 0 6px; line-height: 1.4;
+  }
+  .issue-desc { font-size: 12px; color: var(--text-3); margin: 0 0 10px; }
+  .issue-foot { font-size: 11px; color: var(--muted); font-family: var(--font-mono); }
+
+  /* ── Quote ──────────────────────────────────── */
+  .quote-list { display: flex; flex-direction: column; gap: 12px; }
+  .quote {
+    border-left: 3px solid var(--warn);
+    padding: 12px 16px;
+    background: var(--surface-2);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  }
+  .quote-text { font-size: 13.5px; color: var(--text); margin: 0 0 6px; line-height: 1.55; }
+  .quote-meta { font-size: 11px; color: var(--text-3); font-family: var(--font-mono); }
+
+  /* ── Press table ───────────────────────────── */
+  .press-table {
+    width: 100%; border-collapse: collapse;
+    font-size: 13px;
+  }
+  .press-table th, .press-table td {
+    padding: 12px 14px; text-align: left;
+    border-bottom: 1px solid var(--line-2);
+  }
+  .press-table th {
+    font-size: 11px; font-weight: 500;
+    color: var(--text-3);
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .press-table tbody tr:hover { background: var(--surface-2); }
+  .press-table .num { font-family: var(--font-mono); text-align: right; }
+  .bar-mini {
+    display: inline-block; height: 6px; border-radius: 3px;
+    background: var(--neutral-soft);
+    width: 80px; vertical-align: middle;
+    overflow: hidden; position: relative;
+  }
+  .bar-mini > span {
+    display: block; height: 100%;
+    background: linear-gradient(90deg, var(--good) var(--good-w, 0%), var(--warn) var(--good-w, 0%));
+  }
+
+  /* ── Heatmap ───────────────────────────────── */
+  .heatmap {
+    display: grid; grid-template-columns: 28px repeat(7, 1fr); gap: 4px;
+  }
+  .heatmap .h-h { font-size: 11px; color: var(--text-3); text-align: center; padding: 4px 0; }
+  .heatmap .h-d { font-size: 11px; color: var(--text-3); display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; }
+  .heatmap .cell {
+    aspect-ratio: 1.6 / 1;
+    border-radius: 4px;
+    background: var(--neutral-soft);
+  }
+  .cell.lv1 { background: #DCFCE7; }
+  .cell.lv2 { background: #BBF7D0; }
+  .cell.lv3 { background: #86EFAC; }
+  .cell.lv-1 { background: #FEE2E2; }
+  .cell.lv-2 { background: #FECACA; }
+  .cell.lv-3 { background: #FCA5A5; }
+
+  /* ── Footer actions ───────────────────────── */
+  .actions {
+    display: flex; gap: 10px; justify-content: flex-end;
+    margin: 24px 0 48px;
+  }
+  .btn {
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-size: 13px; font-weight: 500;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+  }
+  .btn.primary {
+    background: var(--text); color: #fff; border-color: var(--text);
+  }
+  .btn:hover { box-shadow: var(--shadow-sm); }
+
+  @media (max-width: 960px) {
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .trend-grid { grid-template-columns: 1fr; }
+    .issue-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="container topbar-inner">
+    <div class="logo">DABEE<span class="accent">.</span>RUN</div>
+    <nav class="nav">
+      <a href="#">LIVE</a>
+      <a href="#" class="active">Report</a>
+    </nav>
+    <div class="topbar-meta">
+      <span class="dot-live"></span>
+      <span class="tnum">2026.05.04 KST</span>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- Page header -->
+  <div class="page-header">
+    <div class="crumb">REPORT &nbsp;/&nbsp; LOOKBACK ANALYSIS</div>
+    <h1 class="page-title">여론 리포트</h1>
+    <p class="page-subtitle">기간별 SK하이닉스 여론 추이를 한눈에 확인합니다.</p>
+    <div class="subtabs" role="tablist">
+      <div class="subtab" role="tab">Daily<span class="meta tnum">05.03</span></div>
+      <div class="subtab active" role="tab" aria-selected="true">Weekly<span class="meta tnum">W18</span></div>
+      <div class="subtab" role="tab">Monthly<span class="meta tnum">2026.04</span></div>
+    </div>
+  </div>
+
+  <!-- KPI Strip -->
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="kpi-label">Sentiment Index</div>
+      <div class="kpi-value tnum">+38</div>
+      <span class="kpi-delta up">+12.4 vs prev week</span>
+      <div class="kpi-sub">7일 평균 NSS</div>
+    </div>
+    <div class="kpi good">
+      <div class="kpi-label">양호 기사</div>
+      <div class="kpi-value tnum">142</div>
+      <span class="kpi-delta up">+18%</span>
+      <div class="kpi-sub">전체의 58.4%</div>
+    </div>
+    <div class="kpi warn">
+      <div class="kpi-label">비우호 기사</div>
+      <div class="kpi-value tnum">47</div>
+      <span class="kpi-delta down">-9%</span>
+      <div class="kpi-sub">전체의 19.3%</div>
+    </div>
+    <div class="kpi neutral">
+      <div class="kpi-label">총 수집</div>
+      <div class="kpi-value tnum">243</div>
+      <span class="kpi-delta flat">+2 vs prev</span>
+      <div class="kpi-sub">monitor 187 / reference 56</div>
+    </div>
+  </div>
+
+  <!-- AI Summary -->
+  <section class="section ai-card">
+    <div class="section-head">
+      <div>
+        <span class="ai-tag">AI Pulse · Gemini</span>
+        <h2 class="section-title">이번 주 여론 총평</h2>
+      </div>
+      <div class="section-sub" style="color: rgba(255,255,255,.55);">2026.04.27 — 05.03</div>
+    </div>
+    <div class="ai-body">
+      <p>이번 주 SK하이닉스 여론은 <em class="up">전반적으로 긍정 흐름</em>을 회복했습니다. 주 초반 <strong>성과급 차등 지급 논란</strong>으로 비우호 기사가 일시 급증했으나, 수요일 발표된 <strong>HBM3E 12단 양산 본격화</strong> 보도가 양호 기사 비중을 빠르게 끌어올렸습니다.</p>
+      <p>주요 비우호 이슈는 <em class="down">노조 성과급 갈등(12건)</em>과 <em class="down">중국 CXMT 추격(7건)</em>으로 압축됩니다. 양호 보도는 <strong>HBM 시장 점유율 우위</strong>와 <strong>1분기 어닝 서프라이즈 기대</strong>를 중심으로 형성되었습니다.</p>
+      <p>다음 주 주목할 변수는 5월 7일 예정된 <strong>1분기 실적 발표</strong>이며, 발표 톤에 따라 NSS가 +50선을 돌파할 가능성이 있습니다.</p>
+    </div>
+  </section>
+
+  <!-- Trend chart + breakdown -->
+  <section class="section">
+    <div class="section-head">
+      <h2 class="section-title">여론 추이</h2>
+      <span class="section-sub">최근 7일 일별 Sentiment Index 및 분포</span>
+    </div>
+    <div class="trend-grid">
+      <div>
+        <div class="chart-wrap">
+          <svg class="chart" viewBox="0 0 600 240" preserveAspectRatio="none">
+            <line x1="40" y1="40" x2="600" y2="40" stroke="#E5E7EB" stroke-dasharray="3,3"/>
+            <line x1="40" y1="120" x2="600" y2="120" stroke="#9CA3AF"/>
+            <line x1="40" y1="200" x2="600" y2="200" stroke="#E5E7EB" stroke-dasharray="3,3"/>
+            <text x="6" y="44" font-size="10" fill="#9CA3AF" font-family="JetBrains Mono">+100</text>
+            <text x="20" y="124" font-size="10" fill="#6B7280" font-family="JetBrains Mono">0</text>
+            <text x="6" y="204" font-size="10" fill="#9CA3AF" font-family="JetBrains Mono">-100</text>
+
+            <!-- bars: good above 120, warn below 120 -->
+            <g>
+              <rect x="60"  y="90"  width="40" height="30" fill="#A7F3D0"/>
+              <rect x="60"  y="120" width="40" height="22" fill="#FECACA"/>
+              <rect x="140" y="78"  width="40" height="42" fill="#A7F3D0"/>
+              <rect x="140" y="120" width="40" height="14" fill="#FECACA"/>
+              <rect x="220" y="60"  width="40" height="60" fill="#A7F3D0"/>
+              <rect x="220" y="120" width="40" height="40" fill="#FECACA"/>
+              <rect x="300" y="100" width="40" height="20" fill="#A7F3D0"/>
+              <rect x="300" y="120" width="40" height="50" fill="#FECACA"/>
+              <rect x="380" y="68"  width="40" height="52" fill="#A7F3D0"/>
+              <rect x="380" y="120" width="40" height="20" fill="#FECACA"/>
+              <rect x="460" y="56"  width="40" height="64" fill="#A7F3D0"/>
+              <rect x="460" y="120" width="40" height="10" fill="#FECACA"/>
+              <rect x="540" y="62"  width="40" height="58" fill="#A7F3D0"/>
+              <rect x="540" y="120" width="40" height="14" fill="#FECACA"/>
+            </g>
+
+            <!-- NSS line -->
+            <path d="M80,108 L160,98 L240,80 L320,140 L400,90 L480,72 L560,82"
+                  stroke="#2563EB" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            <g>
+              <circle cx="80"  cy="108" r="4" fill="#2563EB"/>
+              <circle cx="160" cy="98"  r="4" fill="#2563EB"/>
+              <circle cx="240" cy="80"  r="4" fill="#2563EB"/>
+              <circle cx="320" cy="140" r="4" fill="#2563EB"/>
+              <circle cx="400" cy="90"  r="4" fill="#2563EB"/>
+              <circle cx="480" cy="72"  r="4" fill="#2563EB"/>
+              <circle cx="560" cy="82"  r="4" fill="#2563EB"/>
+            </g>
+
+            <!-- x labels -->
+            <g font-family="JetBrains Mono" font-size="10" fill="#6B7280" text-anchor="middle">
+              <text x="80"  y="225">04.27</text>
+              <text x="160" y="225">04.28</text>
+              <text x="240" y="225">04.29</text>
+              <text x="320" y="225">04.30</text>
+              <text x="400" y="225">05.01</text>
+              <text x="480" y="225">05.02</text>
+              <text x="560" y="225">05.03</text>
+            </g>
+          </svg>
+        </div>
+        <div class="legend-row">
+          <span class="legend"><i class="swatch" style="background:#2563EB"></i> Sentiment Index</span>
+          <span class="legend"><i class="swatch" style="background:#A7F3D0"></i> 양호</span>
+          <span class="legend"><i class="swatch" style="background:#FECACA"></i> 비우호</span>
+        </div>
+      </div>
+      <div class="stat-list">
+        <div class="stat-row">
+          <span class="label"><i class="swatch brand"></i>주 평균 NSS</span>
+          <span class="value tnum">+38</span>
+        </div>
+        <div class="stat-row">
+          <span class="label"><i class="swatch good"></i>최고점 (05.02)</span>
+          <span class="value tnum">+62</span>
+        </div>
+        <div class="stat-row">
+          <span class="label"><i class="swatch warn"></i>최저점 (04.30)</span>
+          <span class="value tnum">-14</span>
+        </div>
+        <div class="stat-row">
+          <span class="label"><i class="swatch neutral"></i>변동성 (σ)</span>
+          <span class="value tnum">24.3</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Hot issues -->
+  <section class="section">
+    <div class="section-head">
+      <h2 class="section-title">핫이슈 클러스터</h2>
+      <span class="section-sub">동일 사안 기사 묶음 · 상위 3건</span>
+    </div>
+    <div class="issue-grid">
+      <article class="issue">
+        <div class="issue-head">
+          <span class="pill warn">비우호</span>
+          <span class="issue-count tnum">12건</span>
+        </div>
+        <h3 class="issue-title">노조 성과급 차등 지급 논란</h3>
+        <p class="issue-desc">조합원 간 차등안 발표 후 SNS·언론 반응이 확산. 임원 인용 다수.</p>
+        <div class="issue-foot">PEAK 04.30 · 매체 9곳</div>
+      </article>
+      <article class="issue">
+        <div class="issue-head">
+          <span class="pill good">양호</span>
+          <span class="issue-count tnum">9건</span>
+        </div>
+        <h3 class="issue-title">HBM3E 12단 양산 본격화</h3>
+        <p class="issue-desc">엔비디아 공급 확대 보도. 점유율 50% 돌파 전망 다수 인용.</p>
+        <div class="issue-foot">PEAK 05.02 · 매체 8곳</div>
+      </article>
+      <article class="issue">
+        <div class="issue-head">
+          <span class="pill neutral">참고</span>
+          <span class="issue-count tnum">7건</span>
+        </div>
+        <h3 class="issue-title">중국 CXMT, HBM 양산 진입</h3>
+        <p class="issue-desc">경쟁사 동향. 단기 영향 제한적이나 중장기 모니터링 필요.</p>
+        <div class="issue-foot">PEAK 05.01 · 매체 6곳</div>
+      </article>
+    </div>
+  </section>
+
+  <!-- Quotes + Press distribution -->
+  <div class="trend-grid">
+    <section class="section">
+      <div class="section-head">
+        <h2 class="section-title">주요 인용</h2>
+        <span class="section-sub">비우호 기사 핵심 문장</span>
+      </div>
+      <div class="quote-list">
+        <div class="quote">
+          <p class="quote-text">"성과급 차등은 결국 조합원 간 갈등을 증폭시킬 뿐, 회사 입장에서도 장기적 손해다."</p>
+          <div class="quote-meta">중앙일보 · 04.30 · 노조 성과급</div>
+        </div>
+        <div class="quote">
+          <p class="quote-text">"중국 CXMT의 양산 진입 속도는 예상보다 빠르다. 향후 2~3년 내 가격 경쟁이 불가피하다."</p>
+          <div class="quote-meta">조선비즈 · 05.01 · 경쟁 구도</div>
+        </div>
+        <div class="quote">
+          <p class="quote-text">"HBM 매출 비중이 빠르게 확대되며 D램 사이클 의존도가 줄어드는 점은 긍정적."</p>
+          <div class="quote-meta">한국경제 · 05.02 · 실적 전망</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2 class="section-title">매체별 분포</h2>
+        <span class="section-sub">상위 5개 매체</span>
+      </div>
+      <table class="press-table">
+        <thead>
+          <tr>
+            <th>매체</th>
+            <th class="num">건수</th>
+            <th>톤</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>조선비즈</td>
+            <td class="num tnum">18</td>
+            <td><span class="bar-mini" style="--good-w:67%"><span></span></span></td>
+          </tr>
+          <tr>
+            <td>한국경제</td>
+            <td class="num tnum">15</td>
+            <td><span class="bar-mini" style="--good-w:80%"><span></span></span></td>
+          </tr>
+          <tr>
+            <td>중앙일보</td>
+            <td class="num tnum">12</td>
+            <td><span class="bar-mini" style="--good-w:42%"><span></span></span></td>
+          </tr>
+          <tr>
+            <td>매일경제</td>
+            <td class="num tnum">11</td>
+            <td><span class="bar-mini" style="--good-w:73%"><span></span></span></td>
+          </tr>
+          <tr>
+            <td>전자신문</td>
+            <td class="num tnum">9</td>
+            <td><span class="bar-mini" style="--good-w:89%"><span></span></span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+
+  <!-- Monthly heatmap (preview) -->
+  <section class="section">
+    <div class="section-head">
+      <h2 class="section-title">월간 히트맵 미리보기</h2>
+      <span class="section-sub">Monthly 탭에서 표시 · 일별 NSS</span>
+    </div>
+    <div class="heatmap">
+      <div class="h-h">M</div><div class="h-h">T</div><div class="h-h">W</div><div class="h-h">T</div><div class="h-h">F</div><div class="h-h">S</div><div class="h-h">S</div>
+      <div class="h-d">W14</div>
+      <div class="cell lv2"></div><div class="cell lv1"></div><div class="cell lv-1"></div><div class="cell lv2"></div><div class="cell lv3"></div><div class="cell lv1"></div><div class="cell"></div>
+      <div class="h-d">W15</div>
+      <div class="cell lv1"></div><div class="cell lv-2"></div><div class="cell lv-1"></div><div class="cell lv1"></div><div class="cell lv2"></div><div class="cell lv3"></div><div class="cell lv2"></div>
+      <div class="h-d">W16</div>
+      <div class="cell lv2"></div><div class="cell lv3"></div><div class="cell lv2"></div><div class="cell lv-1"></div><div class="cell lv-2"></div><div class="cell lv-1"></div><div class="cell lv1"></div>
+      <div class="h-d">W17</div>
+      <div class="cell lv1"></div><div class="cell lv2"></div><div class="cell lv3"></div><div class="cell lv-1"></div><div class="cell lv2"></div><div class="cell lv3"></div><div class="cell lv2"></div>
+      <div class="h-d">W18</div>
+      <div class="cell lv1"></div><div class="cell lv2"></div><div class="cell lv3"></div><div class="cell lv-2"></div><div class="cell lv2"></div><div class="cell lv3"></div><div class="cell lv2"></div>
+    </div>
+    <div class="legend-row" style="margin-top:14px;">
+      <span class="legend"><i class="swatch" style="background:#FCA5A5"></i> -100</span>
+      <span class="legend"><i class="swatch" style="background:#FECACA"></i> -50</span>
+      <span class="legend"><i class="swatch" style="background:#F3F4F6"></i> 0</span>
+      <span class="legend"><i class="swatch" style="background:#BBF7D0"></i> +50</span>
+      <span class="legend"><i class="swatch" style="background:#86EFAC"></i> +100</span>
+    </div>
+  </section>
+
+  <div class="actions">
+    <button class="btn">PNG 저장</button>
+    <button class="btn">PDF 저장</button>
+    <button class="btn primary">텔레그램 발송</button>
+  </div>
+
+</main>
+
+</body>
+</html>
