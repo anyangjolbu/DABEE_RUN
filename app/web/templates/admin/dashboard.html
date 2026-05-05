@@ -163,10 +163,9 @@
       <div class="form-field">
         <label>수신 권한</label>
         <div class="perm-grid">
-          <label class="perm-item"><input type="checkbox" name="receive_tier1" checked /> TIER 1 알림</label>
-          <label class="perm-item"><input type="checkbox" name="receive_tier2" checked /> TIER 2 알림</label>
-          <label class="perm-item"><input type="checkbox" name="receive_tier3" /> TIER 3 알림</label>
-          <label class="perm-item"><input type="checkbox" name="receive_daily_report" checked /> 일간 리포트</label>
+          <label class="perm-item"><input type="checkbox" name="receive_monitor"      checked /> Monitor (SK하이닉스)</label>
+          <label class="perm-item"><input type="checkbox" name="receive_reference"    checked /> Reference (경쟁사·업계)</label>
+          <label class="perm-item"><input type="checkbox" name="receive_daily_report" checked /> Daily Report</label>
         </div>
       </div>
       <button type="submit" class="btn btn-primary btn-full">추가하기</button>
@@ -323,9 +322,8 @@
         <td><b>${escHtml(r.name)}</b></td>
         <td class="mono" style="color:var(--muted)">${escHtml(String(r.chat_id))}</td>
         <td><div class="perm">
-          <i class="${r.receive_tier1 ? 'on' : ''}">T1</i>
-          <i class="${r.receive_tier2 ? 'on' : ''}">T2</i>
-          <i class="${r.receive_tier3 ? 'on' : ''}">T3</i>
+          <i class="${r.receive_monitor      ?? r.receive_tier1_warn ? 'on' : ''}">MON</i>
+          <i class="${r.receive_reference    ? 'on' : ''}">REF</i>
           <i class="${r.receive_daily_report ? 'on' : ''}">DR</i>
         </div></td>
         <td><div class="row-actions">
@@ -358,13 +356,16 @@
   document.getElementById('addForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
+    // STEP-3B-31: recipients API와 페이로드 구조 통일 (permissions 객체)
     const body = {
-      name: fd.get('name'),
-      chat_id: parseInt(fd.get('chat_id'), 10),
-      receive_tier1: fd.has('receive_tier1'),
-      receive_tier2: fd.has('receive_tier2'),
-      receive_tier3: fd.has('receive_tier3'),
-      receive_daily_report: fd.has('receive_daily_report'),
+      name:    fd.get('name'),
+      chat_id: String(fd.get('chat_id')).trim(),  // 그룹 chat_id 음수 대응 → 문자열
+      role:    '',
+      permissions: {
+        receive_monitor:      fd.has('receive_monitor')      ? 1 : 0,
+        receive_reference:    fd.has('receive_reference')    ? 1 : 0,
+        receive_daily_report: fd.has('receive_daily_report') ? 1 : 0,
+      },
     };
     const res = await adminFetch('/api/admin/recipients', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (res.ok) {

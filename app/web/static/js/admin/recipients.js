@@ -22,6 +22,7 @@ function renderTable() {
 
   recipients.forEach(r => {
     const tr = document.createElement('tr');
+    tr.dataset.id = r.id;
     tr.innerHTML = `
       <td class="muted">${r.id}</td>
       <td><strong>${escapeHtml(r.name)}</strong></td>
@@ -29,10 +30,14 @@ function renderTable() {
       <td>${escapeHtml(r.role || '—')}</td>
       <td>
         <div class="perm-grid">
-          ${perm(r, 'receive_monitor',     '🔴 모니터')}
-          ${perm(r, 'receive_reference',   '⚪ 참고')}
-          ${perm(r, 'receive_daily_report','📋 일간')}
+          ${perm(r, 'receive_monitor',     'Monitor')}
+          ${perm(r, 'receive_reference',   'Reference')}
+          ${perm(r, 'receive_daily_report','Daily')}
         </div>
+        <button class="btn btn-secondary perm-save"
+                data-id="${r.id}"
+                style="margin-top:8px;padding:4px 12px;font-size:12px;"
+                disabled>저장</button>
       </td>
       <td>
         <label class="toggle">
@@ -47,7 +52,7 @@ function renderTable() {
     tbody.appendChild(tr);
   });
 
-  // 활성화 토글
+  // 활성화 토글 (이건 즉시저장 유지)
   tbody.querySelectorAll('.enabled-toggle').forEach(cb => {
     cb.addEventListener('change', async (e) => {
       const id = parseInt(e.target.dataset.id);
@@ -56,12 +61,48 @@ function renderTable() {
     });
   });
 
-  // 권한 체크박스
+  // STEP-3B-31: 권한 체크박스는 변경 추적만, 저장 버튼 클릭 시 일괄 PATCH
   tbody.querySelectorAll('input[data-perm]').forEach(cb => {
-    cb.addEventListener('change', async (e) => {
-      const id    = parseInt(e.target.dataset.id);
-      const field = e.target.dataset.perm;
-      await patch(id, { [field]: e.target.checked ? 1 : 0 });
+    cb.addEventListener('change', (e) => {
+      const id  = parseInt(e.target.dataset.id);
+      const tr  = e.target.closest('tr');
+      const btn = tr.querySelector('.perm-save');
+      const dirty = isPermDirty(tr, id);
+      btn.disabled = !dirty;
+      btn.classList.toggle('btn-primary',   dirty);
+      btn.classList.toggle('btn-secondary', !dirty);
+    });
+  });
+
+  // 저장 버튼
+  tbody.querySelectorAll('.perm-save').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = parseInt(btn.dataset.id);
+      const tr = btn.closest('tr');
+      const body = {};
+      tr.querySelectorAll('input[data-perm]').forEach(cb => {
+        body[cb.dataset.perm] = cb.checked ? 1 : 0;
+      });
+      btn.disabled = true;
+      btn.textContent = '저장 중...';
+      const res = await adminFetch(`/api/admin/recipients/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      btn.textContent = '저장';
+      if (res.ok) {
+        toast('권한 저장 완료');
+        // 로컬 캐시 갱신 → dirty 비교 기준 동기화
+        const r = recipients.find(x => x.id === id);
+        if (r) Object.assign(r, body);
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-secondary');
+        btn.disabled = true;
+      } else {
+        toast('저장 실패', 'err');
+        btn.disabled = false;
+      }
     });
   });
 
@@ -76,6 +117,23 @@ function renderTable() {
       else         { toast('삭제 실패', 'err'); }
     });
   });
+}
+
+// STEP-3B-31: 권한 변경 여부 감지 (저장 버튼 활성화 토글용)
+function isPermDirty(tr, id) {
+  const r = recipients.find(x => x.id === id);
+  if (!r) return false;
+  const fields = ['receive_monitor', 'receive_reference', 'receive_daily_report'];
+  for (const f of fields) {
+    const cb = tr.querySelector(`input[data-perm="${f}"]`);
+    if (!cb) continue;
+    let cur = r[f];
+    if (f === 'receive_monitor' && (cur === undefined || cur === null)) {
+      cur = r.receive_tier1_warn ?? 1;
+    }
+    if (Boolean(cur) !== cb.checked) return true;
+  }
+  return false;
 }
 
 function perm(r, field, label) {
