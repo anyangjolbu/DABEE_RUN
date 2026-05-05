@@ -1,11 +1,11 @@
-# app/services/telegram_sender.py
+﻿# app/services/telegram_sender.py
 """
 텔레그램 메시지 전송 (STEP 4A-2).
 
 PR팀이 모바일에서 한눈에 볼 수 있도록 다음 정보를 압축해 표시:
     - [트랙 배지] 매체명 + 제목
     - 원문 링크
-    - 테마, 매칭 키워드, 발행일시(KST)
+    - 매칭 키워드, 발행일시(KST)
     - monitor 트랙: 톤 분류 (비우호/양호/미분석) + 비우호문장 인용
     - reference 트랙: '참고' 배지만, 톤 분석 없음
     - GPT 요약
@@ -83,15 +83,14 @@ def build_message(article: dict, summary: str, tone: dict,
     title  = article.get("title_clean") or article.get("title", "제목 없음")
     link   = article.get("originallink") or article.get("link", "")
 
-    # 분류 추출 (monitor만)
+    # 분류 추출 (monitor만, 본문 분류 라인에서만 사용)
     classification = (tone or {}).get("classification", "")
-    badge = _track_badge(track, classification)
 
-    # 첫 줄: [배지] <매체> 제목
-    title_line = f"[{badge}] <{press}> {title}" if press else f"[{badge}] {title}"
+    # STEP-3B-33: 제목 라인에서 분류 배지 제거 (가독성 개선)
+    # 첫 줄: <매체> 제목
+    title_line = f"<{press}> {title}" if press else title
 
-    # 테마 라인
-    theme_line = f"테마: {theme_label}" if theme_label else ""
+    # STEP-3B-33: '테마' 라인 제거 (UI에서 이미 식별 가능, 노이즈 감소)
 
     # 키워드, 발행일
     kw_line  = _format_keywords(article.get("matched_keywords", []))
@@ -100,8 +99,6 @@ def build_message(article: dict, summary: str, tone: dict,
     SEP = "─" * 18
 
     lines = [title_line, link, SEP]
-    if theme_line:
-        lines.append(theme_line)
     if kw_line:
         lines.append(f"키워드: {kw_line}")
     lines.append(pub_line)
@@ -113,9 +110,8 @@ def build_message(article: dict, summary: str, tone: dict,
         conf  = tone.get("confidence", "")
         reason = tone.get("reason", "") or ""
 
+        # STEP-3B-33: 신뢰도 표기 제거 (사용자에게 의미 전달이 약하고 노이즈)
         cls_line = f"분류: [{classification}]"
-        if conf:
-            cls_line += f" (신뢰도 {conf})"
         if total:
             cls_line += f" — 비우호 {h}/{total}문장"
         lines.append(cls_line)
