@@ -1,4 +1,4 @@
-"""
+﻿"""
 settings.json 로드/저장 + 기본값 병합.
 
 STEP 4A-1:
@@ -29,10 +29,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "naver_sort":          "date",
     "naver_max_per_keyword": 30,
 
-    # Gemini 모델
-    "gpt_model_summary":        "gemini-flash-lite-latest",
-    "gpt_model_classification": "gemini-flash-lite-latest",
-    "gpt_model_tone":           "gemini-flash-latest",
+    # Gemini 모델 (STEP-3B-34: 요약은 lite, 톤분석은 flash로 차등 유지)
+    "gpt_model_summary": "gemini-flash-lite-latest",
+    "gpt_model_tone":    "gemini-flash-latest",
 
     # 시스템 프롬프트 (요약용 톤)
     "summary_system_prompt": (

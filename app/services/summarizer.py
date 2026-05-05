@@ -1,14 +1,12 @@
-# app/services/summarizer.py
+﻿# app/services/summarizer.py
 """
-기사 요약 (Gemini).
+기사 요약 (Gemini Flash Lite).
 
 본문 크롤링은 호출자(pipeline)가 담당하고, 이 모듈은
-"이미 받은 텍스트를 요약"만 합니다. 책임을 분리해 테스트가 쉽고,
-요약만 따로 재실행하기도 쉬워집니다.
+"이미 받은 텍스트를 요약"만 합니다.
 
-티어별로 다른 모델을 쓸 수 있게 settings에서 모델명을 읽습니다.
-- TIER 1 (하이닉스·삼성): 가장 정확한 모델 권장
-- TIER 2/3 (산업·경쟁사): 가벼운 모델로 비용 절감
+STEP-3B-34: tier 분기·gpt_model_tier* 키 등 구버전 잔존 일소.
+            요약 모델은 lite 단일, 톤분석은 별도 (tone_analyzer.py 참조).
 """
 
 import logging
@@ -20,52 +18,36 @@ from app.services.gemini_client import get_client
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_MODEL    = "gemini-flash-lite-latest"
+MAX_OUTPUT_TOKEN = 1024   # 한국어 5~6문장 + thinking 토큰 여유
+BODY_LIMIT       = 4000
+
 
 def _clean(text: str) -> str:
-    """HTML 태그 제거."""
     return re.sub(r"<[^>]+>", "", text or "").strip()
 
 
-def _resolve_model(tier: int, settings: dict) -> str:
-    """티어에 맞는 모델명 반환. 미설정 시 안전한 기본값."""
-    key = {1: "gpt_model_tier1",
-           2: "gpt_model_tier2",
-           3: "gpt_model_tier3"}.get(tier, "gpt_model_tier3")
-    return settings.get(key, "gemini-flash-lite-latest")
-
-
 def summarize(article: dict, settings: dict) -> str:
-    """
-    기사 1건을 요약해 반환.
-
-    Args:
-        article: 기사 dict. 다음 키를 사용:
-            - title: 제목
-            - description: 네이버 API description (폴백용)
-            - _crawled_body: 크롤링된 본문 (있으면 우선 사용)
-            - tier: 티어 (모델 선택용)
-        settings: settings.json (gpt_system_prompt, gpt_model_tier* 사용)
-
-    Returns:
-        요약 문자열. 실패 시 description 또는 "요약 실패" 반환.
-    """
+    """기사 1건 요약. 실패 시 description 또는 안내 문구 반환."""
     title       = _clean(article.get("title", ""))
     description = _clean(article.get("description", ""))
     body        = article.get("_crawled_body", "")
-    tier        = int(article.get("tier", 3))
 
-    model         = _resolve_model(tier, settings)
-    system_prompt = settings.get("gpt_system_prompt", "")
+    model = settings.get("gpt_model_summary") or DEFAULT_MODEL
+    system_prompt = (
+        settings.get("summary_system_prompt")
+        or settings.get("gpt_system_prompt")  # 구 키 fallback
+        or ""
+    )
 
-    # 본문이 있으면 본문 기반, 없으면 description 기반
     if body:
-        user_content = f"제목: {title}\n\n본문:\n{body[:2000]}"
-        logger.info(f"  📝 요약(본문): tier={tier} model={model}")
+        user_content = f"제목: {title}\n\n본문:\n{body[:BODY_LIMIT]}"
+        logger.info(f"  📝 요약(본문 {min(len(body), BODY_LIMIT)}자) model={model}")
     else:
         user_content = f"제목: {title}\n\n부가 정보: {description}"
-        logger.info(f"  📝 요약(description): tier={tier} model={model}")
+        logger.info(f"  📝 요약(description) model={model}")
 
-    full_prompt = f"{system_prompt}\n\n{user_content}"
+    full_prompt = f"{system_prompt}\n\n{user_content}".strip()
 
     client = get_client()
     if client is None:
@@ -77,11 +59,22 @@ def summarize(article: dict, settings: dict) -> str:
             model=model,
             contents=full_prompt,
             config=types.GenerateContentConfig(
-                max_output_tokens=400,
-                temperature=0.3,   # 약간의 자연스러움 + 안정적
+                max_output_tokens=MAX_OUTPUT_TOKEN,
+                temperature=0.3,
             ),
         )
         summary = (resp.text or "").strip()
+
+        # 잘림 진단
+        try:
+            fin = resp.candidates[0].finish_reason if resp.candidates else None
+            if fin and str(fin).upper().endswith("MAX_TOKENS"):
+                logger.warning(
+                    f"  ⚠️ 요약 잘림(MAX_TOKENS) — model={model} len={len(summary)}자"
+                )
+        except Exception:
+            pass
+
         if not summary:
             return description or "요약 실패 (빈 응답)"
         return summary

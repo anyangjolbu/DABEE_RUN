@@ -1,4 +1,4 @@
-"""
+﻿"""
 파이프라인 오케스트레이터.
 
 STEP 4A-1:
@@ -105,7 +105,6 @@ def run_once(dry_run: bool = False,
         theme_cfg   = themes.get(theme_id, {})
         track       = theme_cfg.get("track", "monitor")
         article["track"]       = track
-        article["tier"]        = theme_cfg.get("tier", 1)
         theme_label            = theme_cfg.get("label", theme_id)
 
         press = press_resolver.resolve_press_from_article(article)
