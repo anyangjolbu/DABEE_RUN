@@ -27,7 +27,6 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # 네이버 API
     "naver_display_count": 30,
     "naver_sort":          "date",
-    "naver_max_per_keyword": 30,
 
     # Gemini 모델 (STEP-3B-34: 요약은 lite, 톤분석은 flash로 차등 유지)
     "gpt_model_summary": "gemini-flash-lite-latest",

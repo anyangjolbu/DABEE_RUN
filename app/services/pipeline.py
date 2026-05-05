@@ -33,13 +33,17 @@ PROMOTE_KEYWORDS = ("SK하이닉스", "하이닉스", "SKhynix", "hynix",
                     "솔리다임", "곽노정", "최태원")
 
 
-def _body_has_priority_target(body: str) -> bool:
-    """본문에 핵심 모니터링 대상이 등장하는지 확인."""
-    if not body:
+def _body_has_priority_target(body: str, title: str = "", description: str = "") -> bool:
+    """본문/제목/설명 어디든 핵심 모니터링 대상이 등장하는지 확인.
+
+    STEP-3B-36: 본문 크롤링 실패(빈 body) 또는 셀렉터 매칭 실패로 본문이
+    부족한 경우에도 제목·description fallback으로 PROMOTE 키워드 검사.
+    """
+    haystack = " ".join(filter(None, [body or "", title or "", description or ""])).lower()
+    if not haystack.strip():
         return False
-    body_lower = body.lower()
     for kw in PROMOTE_KEYWORDS:
-        if kw.lower() in body_lower:
+        if kw.lower() in haystack:
             return True
     return False
 
@@ -138,7 +142,7 @@ def run_once(dry_run: bool = False,
             if image_url:
                 article["image_url"] = image_url
 
-            if _body_has_priority_target(body):
+            if _body_has_priority_target(body, article.get("title", ""), article.get("description", "")):
                 # 승격: monitor로 처리
                 logger.info(f"  🆙 reference → monitor 승격 (본문에 SK하이닉스 등 등장)")
                 article["track"] = "monitor"
