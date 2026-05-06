@@ -113,12 +113,12 @@ def _fetch_keyword(keyword: str, headers: dict, display: int,
     return []
 
 
-def _filter_by_lookback(articles: list, lookback_days: int) -> list:
-    """pubDate 기준 lookback_days 이내 기사만 통과. 0 이하면 무필터."""
-    if lookback_days <= 0:
+def _filter_by_lookback(articles: list, lookback_hours: int) -> list:
+    """pubDate 기준 lookback_hours 이내 기사만 통과. 0 이하면 무필터."""
+    if lookback_hours <= 0:
         return articles
     from datetime import datetime, timedelta, timezone
-    cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
     out, dropped = [], 0
     for a in articles:
         iso = a.get("pub_date_iso")
@@ -136,7 +136,7 @@ def _filter_by_lookback(articles: list, lookback_days: int) -> list:
         except Exception:
             out.append(a)
     if dropped:
-        logger.info(f"🗓️ lookback {lookback_days}일 필터: {dropped}건 제외, {len(out)}건 통과")
+        logger.info(f"🗓️ lookback {lookback_hours}시간 필터: {dropped}건 제외, {len(out)}건 통과")
     return out
 
 
@@ -163,5 +163,5 @@ def fetch_all_themes(settings: dict) -> list[dict]:
                 all_articles.append(a)
 
     logger.info(f"✅ 전체 수집 완료: {len(all_articles)}건 (테마 간 중복 제거 후)")
-    all_articles = _filter_by_lookback(all_articles, int(settings.get("collection_lookback_days", 0) or 0))
+    all_articles = _filter_by_lookback(all_articles, int(settings.get("collection_lookback_hours", 3) or 0))
     return all_articles

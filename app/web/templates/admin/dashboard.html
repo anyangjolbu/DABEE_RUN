@@ -124,8 +124,8 @@
           <input type="number" class="input-field" id="cfgDisplay" min="1" max="100" />
         </div>
         <div class="form-field">
-          <label>최대 기사 수집일 (lookback_days, 0=무제한)</label>
-          <input type="number" class="input-field" id="cfgLookback" min="0" max="30" />
+          <label>최대 기사 수집 윈도우 (lookback_hours, 시간, 0=무제한)</label>
+          <input type="number" class="input-field" id="cfgLookback" min="0" max="72" />
           <small style="color:var(--muted);font-size:11px;">예: 3 = 3일 이내 기사만 처리. pubDate 기준.</small>
         </div>
         <button class="btn btn-primary btn-sm" id="btnSaveCfg">설정 저장</button>
@@ -411,13 +411,13 @@
   // 현재 설정 채우기
   adminFetch('/api/admin/settings').then(r => r.json()).then(s => {
     document.getElementById('cfgDisplay').value  = s.naver_display_count ?? 20;
-    document.getElementById('cfgLookback').value = s.collection_lookback_days ?? 0;
+    document.getElementById('cfgLookback').value = s.collection_lookback_hours ?? 3;
   });
 
   document.getElementById('btnSaveCfg').addEventListener('click', async () => {
     const body = {
       naver_display_count:      parseInt(document.getElementById('cfgDisplay').value, 10) || 20,
-      collection_lookback_days: parseInt(document.getElementById('cfgLookback').value, 10) || 0,
+      collection_lookback_hours: parseInt(document.getElementById('cfgLookback').value, 10) || 0,
     };
     const res = await adminFetch('/api/admin/settings', {
       method: 'PATCH',
