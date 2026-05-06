@@ -116,6 +116,9 @@ ALTER_MIGRATIONS = [
     ("articles",   "tone_reason",          "TEXT"),
     ("articles",   "tone_confidence",      "TEXT"),
     ("articles",   "image_url",            "TEXT"),
+    # STEP-3B-38: 미분석 무한 재시도 방지. reanalyze.py가 +1씩 증가시키고
+    # cap 도달 시 더 이상 재분석 대상에서 제외.
+    ("articles",   "reanalyze_attempts",   "INTEGER DEFAULT 0"),
     ("recipients", "receive_reference",    "INTEGER DEFAULT 0"),
     ("recipients", "receive_monitor",      "INTEGER DEFAULT 1"),
 ]
