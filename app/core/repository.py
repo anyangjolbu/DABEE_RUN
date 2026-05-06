@@ -194,6 +194,30 @@ def article_daily(date_str: str, limit: int = 20) -> list[dict]:
 # ════════════════════════════════════════════════════════════
 #  Recipient
 # ════════════════════════════════════════════════════════════
+
+def article_window(start_iso: str, end_iso: str,
+                   tracks: tuple = ("monitor", "reference")) -> list[dict]:
+    """시간 윈도우 [start_iso, end_iso) 내 기사 조회.
+
+    Args:
+        start_iso: KST ISO 시각 (포함)
+        end_iso:   KST ISO 시각 (제외)
+        tracks:    트랙 필터. 기본 (monitor, reference) 둘 다.
+
+    Returns:
+        article dict 리스트. 시간 오름차순.
+    """
+    placeholders = ",".join("?" * len(tracks))
+    sql = f"""
+        SELECT * FROM articles
+        WHERE collected_at >= ? AND collected_at < ?
+          AND track IN ({placeholders})
+        ORDER BY collected_at ASC
+    """
+    with get_conn() as conn:
+        rows = conn.execute(sql, (start_iso, end_iso, *tracks)).fetchall()
+    return [dict(r) for r in rows]
+
 def recipient_list_active() -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
@@ -277,31 +301,36 @@ def recipient_add(chat_id: str, name: str, role: str = "",
 # ════════════════════════════════════════════════════════════
 #  Daily Reports
 # ════════════════════════════════════════════════════════════
-def report_save(date_str: str, body: str, recipients_count: int) -> None:
+def report_save(date_str: str, slot: str, body: str,
+                payload_json: str, recipients_count: int) -> None:
+    """슬롯별 리포트 저장. slot in ('morning', 'evening')."""
     sent_at = datetime.now(config.KST).isoformat()
     with get_conn() as conn:
         conn.execute(
             """INSERT OR REPLACE INTO daily_reports
-               (report_date, sent_at, body, recipients_count)
-               VALUES (?,?,?,?)""",
-            (date_str, sent_at, body, recipients_count),
+               (report_date, slot, sent_at, body, payload_json, recipients_count)
+               VALUES (?,?,?,?,?,?)""",
+            (date_str, slot, sent_at, body, payload_json, recipients_count),
         )
 
 
 def report_list(limit: int = 30) -> list[dict]:
+    """최근 리포트 목록 (슬롯 포함)."""
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT report_date, sent_at, recipients_count"
-            " FROM daily_reports ORDER BY report_date DESC LIMIT ?",
+            "SELECT report_date, slot, sent_at, recipients_count"
+            " FROM daily_reports ORDER BY report_date DESC, slot DESC LIMIT ?",
             (limit,),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def report_get(date_str: str) -> Optional[dict]:
+def report_get(date_str: str, slot: str = "evening") -> Optional[dict]:
+    """슬롯별 리포트 조회."""
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT * FROM daily_reports WHERE report_date = ?", (date_str,)
+            "SELECT * FROM daily_reports WHERE report_date = ? AND slot = ?",
+            (date_str, slot),
         ).fetchone()
     return dict(row) if row else None
 

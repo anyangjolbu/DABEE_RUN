@@ -99,10 +99,13 @@ SCHEMA = [
     """
     CREATE TABLE IF NOT EXISTS daily_reports (
         id                INTEGER PRIMARY KEY AUTOINCREMENT,
-        report_date       TEXT    UNIQUE NOT NULL,
+        report_date       TEXT    NOT NULL,
+        slot              TEXT    NOT NULL DEFAULT 'evening',
         sent_at           TEXT    NOT NULL,
         body              TEXT,
-        recipients_count  INTEGER
+        payload_json      TEXT,
+        recipients_count  INTEGER,
+        UNIQUE(report_date, slot)
     )
     """,
 ]
@@ -112,6 +115,8 @@ SCHEMA = [
 #  멱등 처리: 컬럼이 없을 때만 ADD.
 ALTER_MIGRATIONS = [
     ("articles",   "track",                "TEXT DEFAULT 'monitor'"),
+    ("daily_reports", "slot",         "TEXT NOT NULL DEFAULT 'evening'"),
+    ("daily_reports", "payload_json", "TEXT"),
     ("articles",   "tone_classification",  "TEXT"),
     ("articles",   "tone_reason",          "TEXT"),
     ("articles",   "tone_confidence",      "TEXT"),

@@ -1,110 +1,366 @@
 # app/services/report_builder.py
 """
-일간 리포트 생성 + 텔레그램 발송.
+일간 리포트 v2 — 06/18 슬롯 분할 + LLM 임팩트 평가 + 카테고리 분류.
 
-매일 지정 시각(settings.daily_report_hour_kst, 기본 7시)에 스케줄러가
-run_daily_report()를 호출합니다. 전날 수집된 기사 상위 N건을 요약해
-receive_daily_report 권한이 있는 수신자에게 발송하고 DB에 기록합니다.
+윈도우 (KST):
+  - morning 슬롯 (06:00 발송): 어제 18:00 ~ 오늘 06:00 (12h)
+  - evening 슬롯 (18:00 발송): 오늘 06:00 ~ 오늘 18:00 (12h)
+
+처리 흐름:
+  1. 윈도우 내 monitor + reference 기사 전체 조회
+  2. SK 그룹 키워드로 카테고리 분류 (company_group / industry)
+  3. report_impact.evaluate() 호출 → 톱5 코멘터리 + 톱10×2
+  4. 텔레그램 메시지 빌드 (4096자 안전, 1메시지 보장)
+  5. receive_daily_report 권한자에게 발송
+  6. daily_reports 테이블에 (date, slot) 저장 (body + payload_json)
 """
 
+import json
 import logging
 from datetime import datetime, timedelta
+from typing import Optional
 
 from app import config
 from app.core import repository as repo
-from app.services import settings_store, telegram_sender
+from app.services import report_impact, settings_store, telegram_sender
 
 logger = logging.getLogger(__name__)
 
+# 텔레그램 메시지 안전 한계 (실제 4096이지만 여유 둠)
+TELEGRAM_MAX_CHARS = 3900
 
-def build_report_body(articles: list[dict], date_str: str) -> str:
-    """텔레그램 일간 리포트 본문 구성."""
-    SEP = "─" * 22
-    lines = [
-        f"📰 {date_str} 일간 모니터링 리포트",
-        f"총 {len(articles)}건 주요 보도",
-        SEP,
-    ]
+# 슬롯별 윈도우 정의 (시간만 — 날짜는 동적)
+SLOT_DEFS = {
+    "morning": {"start_hour": 18, "start_offset_days": -1, "end_hour": 6,  "end_offset_days": 0,
+                "label_kr": "아침"},
+    "evening": {"start_hour": 6,  "start_offset_days": 0,  "end_hour": 18, "end_offset_days": 0,
+                "label_kr": "저녁"},
+}
 
-    tier_emoji = {1: "🔴", 2: "🟠", 3: "🟡"}
-    tone_mark  = {"경고": "⚠️ ", "주의": "🔔 "}
-
-    for i, a in enumerate(articles, 1):
-        tier      = a.get("tier", 3)
-        tone      = a.get("tone_level") or ""
-        title     = a.get("title_clean") or a.get("title", "(제목 없음)")
-        url       = a.get("original_url") or a.get("url", "")
-        press     = a.get("press", "")
-        summary   = a.get("summary", "")
-        theme_lbl = a.get("theme_label", "")
-
-        prefix = f"{tier_emoji.get(tier, '⚪')} {tone_mark.get(tone, '')}"
-        source = f"[{press or theme_lbl}] " if (press or theme_lbl) else ""
-
-        lines.append(f"{i}. {prefix}{source}{title}")
-        if url:
-            lines.append(url)
-        if summary:
-            lines.append(f"   {summary}")
-        lines.append("")
-
-    lines.append(SEP)
-    lines.append("DABEE Run — SK하이닉스 PR팀")
-    return "\n".join(lines)
+# 카테고리 분류 키워드 (본문/제목/요약에 등장 시 company_group)
+SK_GROUP_KEYWORDS = (
+    "SK하이닉스", "하이닉스", "SKhynix", "hynix", "솔리다임",
+    "SK스퀘어", "SK이노베이션", "SK텔레콤", "SKT", "SK온",
+    "SK가스", "SK디스커버리", "SK바이오팜", "SK바이오사이언스",
+    "SK네트웍스", "SK실트론", "SK시그넷",
+    "SK그룹", "SK(주)", "SK주식회사",
+    "곽노정", "최태원", "최창원", "최재원",
+)
 
 
-def run_daily_report(date_str: str = None) -> dict:
-    """
-    일간 리포트 실행.
+# ──────────────────────────────────────────────────────────────
+#  1. 윈도우 계산
+# ──────────────────────────────────────────────────────────────
+
+def _slot_window(slot: str, base_dt: Optional[datetime] = None) -> tuple[str, str]:
+    """슬롯별 [start_iso, end_iso) 반환 (KST 기준).
 
     Args:
-        date_str: 대상 날짜 YYYY-MM-DD (KST). None이면 전날.
+        slot: 'morning' | 'evening'
+        base_dt: 기준 시각. None이면 datetime.now(config.KST).
 
     Returns:
-        {"date": str, "sent": int, "total": int, "articles": int}
-        또는 {"skipped": True, ...}
+        (start_iso, end_iso) — collected_at 비교용 ISO 문자열
     """
+    if slot not in SLOT_DEFS:
+        raise ValueError(f"unknown slot: {slot}")
+    defn = SLOT_DEFS[slot]
+    if base_dt is None:
+        base_dt = datetime.now(config.KST)
+
+    base_date = base_dt.date()
+    start_dt = datetime.combine(base_date, datetime.min.time(),
+                                 tzinfo=config.KST).replace(hour=defn["start_hour"]) \
+                + timedelta(days=defn["start_offset_days"])
+    end_dt   = datetime.combine(base_date, datetime.min.time(),
+                                 tzinfo=config.KST).replace(hour=defn["end_hour"]) \
+                + timedelta(days=defn["end_offset_days"])
+    return start_dt.isoformat(), end_dt.isoformat()
+
+
+# ──────────────────────────────────────────────────────────────
+#  2. 카테고리 분류
+# ──────────────────────────────────────────────────────────────
+
+def _classify(article: dict) -> str:
+    """카테고리 분류.
+
+    규칙:
+      - track == 'monitor': 무조건 company_group (이미 SK 직접 관련 검증됨)
+      - track == 'reference':
+          * 제목에 SK 그룹 키워드 등장 → company_group (승격)
+          * 그 외 → industry (대다수)
+
+    제목 기준으로 좁힌 이유: 본문에 SK가 한 번 언급되는 것만으로 당사 기사로
+    분류되면 업계 동향이 비어버림. 제목에 등장해야 PR 임팩트가 있다고 간주.
+    """
+    track = article.get("track") or "monitor"
+    if track == "monitor":
+        return "company_group"
+
+    title = (article.get("title_clean") or article.get("title") or "").lower()
+    for kw in SK_GROUP_KEYWORDS:
+        if kw.lower() in title:
+            return "company_group"
+    return "industry"
+
+
+# ──────────────────────────────────────────────────────────────
+#  3. 텔레그램 메시지 빌더
+# ──────────────────────────────────────────────────────────────
+
+def _markers(n: int) -> str:
+    """+개수 마커 (1=+, 2=++, ..., 5=+++++)."""
+    return "+" * n
+
+
+def _press_tag(article: dict) -> str:
+    """언론사 태그 <언론사> 형식."""
+    press = article.get("press") or article.get("theme_label") or ""
+    if not press:
+        return ""
+    # 이모지 제거하고 언론사명만
+    p = press.replace("🔴", "").replace("⚪", "").replace("🟠", "").replace("🟡", "").strip()
+    return f"<{p}>" if p else ""
+
+
+def _article_line(article: dict, marker_count: int = 0) -> tuple[str, str]:
+    """기사 1건 → (제목줄, URL줄). 마커 있으면 제목 앞에 부착."""
+    title = article.get("title_clean") or article.get("title") or "(제목 없음)"
+    url = article.get("original_url") or article.get("url") or ""
+    press_tag = _press_tag(article)
+    prefix = f"{_markers(marker_count)} " if marker_count > 0 else ""
+    title_line = f"{prefix}{press_tag} {title}".strip()
+    return title_line, url
+
+
+def _build_message(slot: str, date_str: str,
+                   commentary: list, company_top: list, industry_top: list,
+                   articles_by_id: dict) -> str:
+    """텔레그램 메시지 빌드. 4096자 안전 컷 적용."""
+    slot_label = SLOT_DEFS[slot]["label_kr"]
+    sep = "─" * 22
+
+    # marker_count by article_id (코멘터리에 등장한 기사)
+    marker_map: dict[int, int] = {}
+    for i, c in enumerate(commentary, start=1):
+        mc = c.get("marker_count", i)
+        c["marker_count"] = mc  # 이후 루프에서도 안전하게 접근
+        marker_map[c["article_id"]] = mc
+
+    lines: list[str] = []
+
+    # ── 헤더 ──
+    lines.append(f"[주요기사보고 - 내신] {date_str} {slot_label}")
+    lines.append("")
+
+    # ── 톱5 코멘터리 ──
+    for c in commentary:
+        marker = _markers(c["marker_count"])
+        lines.append(f"{marker} {c['comment']}")
+        lines.append("")
+
+    # ── 1. 당사 및 그룹 ──
+    lines.append("1. 당사 및 그룹 관련")
+    if company_top:
+        for entry in company_top:
+            aid = entry["article_id"]
+            art = articles_by_id.get(aid)
+            if not art:
+                continue
+            mc = marker_map.get(aid, 0)
+            t, u = _article_line(art, mc)
+            lines.append(t)
+            if u:
+                lines.append(u)
+            lines.append("")
+    else:
+        lines.append("(해당 기사 없음)")
+        lines.append("")
+
+    # ── 2. 업계 동향 ──
+    lines.append("2. 업계 동향")
+    if industry_top:
+        for entry in industry_top:
+            aid = entry["article_id"]
+            art = articles_by_id.get(aid)
+            if not art:
+                continue
+            mc = marker_map.get(aid, 0)
+            t, u = _article_line(art, mc)
+            lines.append(t)
+            if u:
+                lines.append(u)
+            lines.append("")
+    else:
+        lines.append("(해당 기사 없음)")
+
+    body = "\n".join(lines).rstrip() + "\n"
+
+    # ── 4096자 안전 컷 ──
+    if len(body) <= TELEGRAM_MAX_CHARS:
+        return body
+
+    # 1차: 기사 리스트를 8건으로 줄임
+    logger.warning(f"⚠️ 메시지 길이 {len(body)}자 — 기사 리스트 컷 적용")
+    body = _build_message_truncated(slot, date_str, commentary,
+                                     company_top[:8], industry_top[:8], articles_by_id)
+    if len(body) <= TELEGRAM_MAX_CHARS:
+        return body
+
+    # 2차: 6건
+    body = _build_message_truncated(slot, date_str, commentary,
+                                     company_top[:6], industry_top[:6], articles_by_id)
+    if len(body) <= TELEGRAM_MAX_CHARS:
+        return body
+
+    # 3차: 그래도 길면 그대로 (텔레그램 4096자 한도 초과 — 발송단에서 짤림)
+    logger.error(f"❌ 메시지 {len(body)}자 — 한도 초과 발송")
+    return body
+
+
+def _build_message_truncated(slot, date_str, commentary, company_top, industry_top, articles_by_id):
+    """길이 초과 시 재호출용. 코멘터리는 유지, 리스트만 줄임."""
+    return _build_message_inner(slot, date_str, commentary, company_top, industry_top, articles_by_id)
+
+
+def _build_message_inner(slot, date_str, commentary, company_top, industry_top, articles_by_id):
+    """실제 빌드 로직 (재귀 호출 회피용 분리)."""
+    slot_label = SLOT_DEFS[slot]["label_kr"]
+    marker_map = {c["article_id"]: c["marker_count"] for c in commentary}
+    lines = [f"[주요기사보고 - 내신] {date_str} {slot_label}", ""]
+
+    for c in commentary:
+        lines.append(f"{_markers(c['marker_count'])} {c['comment']}")
+        lines.append("")
+
+    lines.append("1. 당사 및 그룹 관련")
+    for entry in (company_top or []):
+        aid = entry["article_id"]
+        art = articles_by_id.get(aid)
+        if not art:
+            continue
+        mc = marker_map.get(aid, 0)
+        t, u = _article_line(art, mc)
+        lines.append(t)
+        if u:
+            lines.append(u)
+        lines.append("")
+    if not company_top:
+        lines.append("(해당 기사 없음)")
+        lines.append("")
+
+    lines.append("2. 업계 동향")
+    for entry in (industry_top or []):
+        aid = entry["article_id"]
+        art = articles_by_id.get(aid)
+        if not art:
+            continue
+        mc = marker_map.get(aid, 0)
+        t, u = _article_line(art, mc)
+        lines.append(t)
+        if u:
+            lines.append(u)
+        lines.append("")
+    if not industry_top:
+        lines.append("(해당 기사 없음)")
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+# ──────────────────────────────────────────────────────────────
+#  4. 메인 진입점
+# ──────────────────────────────────────────────────────────────
+
+def run_slot_report(slot: str, date_str: Optional[str] = None,
+                    base_dt: Optional[datetime] = None) -> dict:
+    """슬롯별 리포트 실행.
+
+    Args:
+        slot: 'morning' | 'evening'
+        date_str: 발송 기준 날짜 (YYYY-MM-DD KST). None이면 base_dt 또는 now.
+        base_dt: 윈도우 계산 기준 시각. None이면 now.
+
+    Returns:
+        {"slot": str, "date": str, "window": [s,e], "articles": int,
+         "sent": int, "total": int, "skipped": bool}
+    """
+    if slot not in SLOT_DEFS:
+        return {"skipped": True, "error": f"unknown slot: {slot}"}
+
     settings = settings_store.load_settings()
     if not settings.get("daily_report_enabled", True):
-        logger.info("일간 리포트 비활성화됨")
-        return {"skipped": True}
+        logger.info("📋 일간 리포트 비활성화")
+        return {"skipped": True, "slot": slot}
 
+    if base_dt is None:
+        base_dt = datetime.now(config.KST)
     if date_str is None:
-        yesterday = datetime.now(config.KST) - timedelta(days=1)
-        date_str  = yesterday.strftime("%Y-%m-%d")
+        date_str = base_dt.strftime("%Y-%m-%d")
 
     # 중복 발송 방지
-    if repo.report_get(date_str):
-        logger.info(f"일간 리포트 이미 발송됨: {date_str}")
-        return {"skipped": True, "date": date_str}
+    if repo.report_get(date_str, slot):
+        logger.info(f"📋 이미 발송된 슬롯: {date_str}/{slot}")
+        return {"skipped": True, "slot": slot, "date": date_str}
 
-    top_n    = int(settings.get("daily_report_top_n", 5))
-    articles = repo.article_daily(date_str, limit=top_n)
-
+    # 1. 윈도우 조회
+    start_iso, end_iso = _slot_window(slot, base_dt)
+    logger.info(f"📋 [{slot}] 윈도우: {start_iso} ~ {end_iso}")
+    articles = repo.article_window(start_iso, end_iso, tracks=("monitor", "reference"))
     if not articles:
-        logger.info(f"일간 리포트: {date_str} 수집 기사 없음")
-        repo.report_save(date_str, "(해당 날짜 수집 기사 없음)", 0)
-        return {"date": date_str, "sent": 0, "total": 0, "articles": 0}
+        logger.info(f"📋 [{slot}] 윈도우 내 기사 없음")
+        repo.report_save(date_str, slot, "(윈도우 내 수집 기사 없음)", "{}", 0)
+        return {"slot": slot, "date": date_str, "articles": 0, "sent": 0, "total": 0}
 
-    body       = build_report_body(articles, date_str)
+    # 2. 카테고리 분류
+    categories = {a["id"]: _classify(a) for a in articles}
+    n_company = sum(1 for v in categories.values() if v == "company_group")
+    n_industry = len(articles) - n_company
+    logger.info(f"📋 [{slot}] 분류: 당사·그룹={n_company}, 업계동향={n_industry}")
+
+    # 3. LLM 임팩트 평가
+    impact = report_impact.evaluate(articles, categories, settings)
+
+    # 4. 메시지 빌드
+    articles_by_id = {a["id"]: a for a in articles}
+    body = _build_message(slot, date_str,
+                          impact["top5_commentary"],
+                          impact["company_group_top10"],
+                          impact["industry_top10"],
+                          articles_by_id)
+
+    # 5. 발송
     recipients = repo.recipient_list_active()
-    targets    = [r for r in recipients if r.get("receive_daily_report")]
-
+    targets = [r for r in recipients if r.get("receive_daily_report")]
     success = 0
     for r in targets:
         ok, err = telegram_sender.send_to_chat(
-            chat_id=r["chat_id"],
-            message=body,
-            disable_preview=True,
+            chat_id=r["chat_id"], message=body, disable_preview=True,
         )
         if ok:
             success += 1
         else:
-            logger.warning(f"일간 리포트 발송 실패 → {r['chat_id']}: {err}")
+            logger.warning(f"📋 발송 실패 → {r.get('chat_id')}: {err}")
 
-    repo.report_save(date_str, body, success)
-    logger.info(f"📋 일간 리포트 완료: {date_str} → {success}/{len(targets)}명 / {len(articles)}건")
-    return {
-        "date": date_str, "sent": success,
-        "total": len(targets), "articles": len(articles),
+    # 6. DB 저장
+    payload = {
+        "slot": slot,
+        "window": [start_iso, end_iso],
+        "categories": {str(k): v for k, v in categories.items()},
+        "impact": impact,
     }
+    repo.report_save(date_str, slot, body, json.dumps(payload, ensure_ascii=False), success)
+
+    logger.info(
+        f"📋 [{slot}] 완료: {date_str} • 기사 {len(articles)} • "
+        f"발송 {success}/{len(targets)}"
+    )
+    return {
+        "slot": slot, "date": date_str, "window": [start_iso, end_iso],
+        "articles": len(articles), "sent": success, "total": len(targets),
+    }
+
+
+# 하위 호환: 기존 run_daily_report() 호출은 evening 슬롯으로 라우팅
+def run_daily_report(date_str: Optional[str] = None) -> dict:
+    return run_slot_report("evening", date_str)

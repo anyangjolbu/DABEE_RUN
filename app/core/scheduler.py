@@ -122,9 +122,16 @@ class Scheduler:
             await self._run_once()
 
     async def _daily_report_loop(self) -> None:
-        """매일 settings.daily_report_hour_kst 시각에 일간 리포트 실행."""
+        """매일 morning/evening 두 시각에 슬롯별 일간 리포트 실행.
+
+        settings:
+            daily_report_morning_kst (기본 6) — 아침 슬롯 발송 시각
+            daily_report_evening_kst (기본 18) — 저녁 슬롯 발송 시각
+            daily_report_hour_kst (레거시) — morning_kst 미설정 시 fallback
+        """
         from app.services import report_builder
-        _sent_today: Optional[str] = None
+        # (date_str, slot) 튜플로 중복 발송 방지
+        _sent_keys: set = set()
 
         while not self._stop_event.is_set():
             # 1분마다 체크 (60초씩 쪼개 정지 신호 즉시 반응)
@@ -134,16 +141,39 @@ class Scheduler:
                 await asyncio.sleep(1)
 
             try:
-                cfg  = settings_store.load_settings()
+                cfg = settings_store.load_settings()
                 if not cfg.get("daily_report_enabled", True):
                     continue
-                now  = datetime.now(config.KST)
-                hour = int(cfg.get("daily_report_hour_kst", 7))
+                now = datetime.now(config.KST)
                 today = now.strftime("%Y-%m-%d")
-                if now.hour == hour and _sent_today != today:
-                    _sent_today = today
-                    logger.info(f"📋 일간 리포트 시각 도달 ({now.strftime('%H:%M')} KST)")
-                    await asyncio.to_thread(report_builder.run_daily_report)
+
+                # 새 키 우선, 없으면 레거시 fallback
+                morning_h = int(cfg.get("daily_report_morning_kst",
+                                cfg.get("daily_report_hour_kst", 6)))
+                evening_h = int(cfg.get("daily_report_evening_kst", 18))
+
+                # 발송 시각 도달 체크
+                slot_to_run = None
+                if now.hour == morning_h:
+                    key = (today, "morning")
+                    if key not in _sent_keys:
+                        slot_to_run = "morning"
+                        _sent_keys.add(key)
+                elif now.hour == evening_h:
+                    key = (today, "evening")
+                    if key not in _sent_keys:
+                        slot_to_run = "evening"
+                        _sent_keys.add(key)
+
+                if slot_to_run:
+                    logger.info(f"📋 일간 리포트 [{slot_to_run}] 시각 도달 ({now.strftime('%H:%M')} KST)")
+                    await asyncio.to_thread(report_builder.run_slot_report, slot_to_run)
+
+                # 메모리 누수 방지 (7일 이상 된 키 제거)
+                if len(_sent_keys) > 30:
+                    cutoff = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+                    _sent_keys = {(d, s) for (d, s) in _sent_keys if d >= cutoff}
+
             except Exception as e:
                 logger.error(f"❌ 일간 리포트 루프 오류: {e}", exc_info=True)
 

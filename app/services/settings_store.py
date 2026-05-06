@@ -72,10 +72,14 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "맛집", "여행", "패션", "뷰티",
     ],
 
-    # 일간 리포트
-    "daily_report_enabled":  True,
-    "daily_report_time":     "08:30",
-    "daily_report_max_items": 10,
+    # 일간 리포트 (v2 — 슬롯 분할)
+    "daily_report_enabled":         True,
+    "daily_report_morning_kst":     6,    # 아침 슬롯 발송 시각 (KST hour)
+    "daily_report_evening_kst":     18,   # 저녁 슬롯 발송 시각 (KST hour)
+    "daily_report_top_commentary":  5,    # 톱5 코멘터리
+    "daily_report_company_max":     10,   # 당사·그룹 카테고리 최대
+    "daily_report_industry_max":    10,   # 업계동향 카테고리 최대
+    "daily_report_impact_prompt":   "",   # 비어있으면 모듈 DEFAULT 사용
 }
 
 
