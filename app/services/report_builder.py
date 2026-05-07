@@ -38,14 +38,18 @@ SLOT_DEFS = {
 }
 
 # 카테고리 분류 키워드 (본문/제목/요약에 등장 시 company_group)
-SK_GROUP_KEYWORDS = (
-    "SK하이닉스", "하이닉스", "SKhynix", "hynix", "솔리다임",
+SK_HYNIX_KEYWORDS = (
+    "SK하이닉스", "하이닉스", "SKhynix", "hynix", "솔리다임", "곽노정",
+)
+SK_AFFILIATE_KEYWORDS = (
     "SK스퀘어", "SK이노베이션", "SK텔레콤", "SKT", "SK온",
     "SK가스", "SK디스커버리", "SK바이오팜", "SK바이오사이언스",
     "SK네트웍스", "SK실트론", "SK시그넷",
     "SK그룹", "SK(주)", "SK주식회사",
-    "곽노정", "최태원", "최창원", "최재원",
+    "최태원", "최창원", "최재원",
 )
+# 기존 호환용: 자사 + 계열사 합집합
+SK_GROUP_KEYWORDS = SK_HYNIX_KEYWORDS + SK_AFFILIATE_KEYWORDS
 
 
 # ──────────────────────────────────────────────────────────────
@@ -109,6 +113,26 @@ def _classify(article: dict) -> str:
 #  3. 텔레그램 메시지 빌더
 # ──────────────────────────────────────────────────────────────
 
+
+
+def _classify_priority(article: dict) -> int:
+    """3단계 우선순위 분류.
+
+    Returns:
+        1: SK하이닉스 직접 (자사) — 최우선
+        2: SK 그룹 계열사 (그룹)
+        3: 업계 동향 (경쟁사·산업·정책)
+    """
+    text = " ".join([
+        str(article.get("title") or ""),
+        str(article.get("summary") or ""),
+        str(article.get("description") or ""),
+    ])
+    if any(k in text for k in SK_HYNIX_KEYWORDS):
+        return 1
+    if any(k in text for k in SK_AFFILIATE_KEYWORDS):
+        return 2
+    return 3
 def _markers(n: int) -> str:
     """+개수 마커 (1=+, 2=++, ..., 5=+++++)."""
     return "+" * n
