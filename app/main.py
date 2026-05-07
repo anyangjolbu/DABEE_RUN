@@ -116,10 +116,84 @@ async def page_feed(request: Request):
 
 
 @app.get("/report", response_class=HTMLResponse)
-async def page_report(request: Request):
+async def page_report(
+    request: Request,
+    date: str | None = None,
+    slot: str | None = None,
+):
+    """일간 리포트 페이지. date/slot 미지정 시 최신 1건."""
+    from app.core import repository as repo
+    import json as _json
+
+    # 최근 14건 인덱스 (사이드 네비용)
+    try:
+        recent = repo.report_list(limit=14)
+    except Exception:
+        recent = []
+
+    # 대상 리포트 선택
+    target = None
+    if date and slot:
+        try:
+            target = repo.report_get(date, slot)
+        except Exception:
+            target = None
+    elif recent:
+        # 가장 최근 리포트 (sent_at DESC 가정)
+        first = recent[0]
+        try:
+            target = repo.report_get(first["report_date"], first["slot"])
+        except Exception:
+            target = None
+
+    # payload_json 파싱
+    payload = {}
+    if target and target.get("payload_json"):
+        try:
+            payload = _json.loads(target["payload_json"])
+        except Exception:
+            payload = {}
+
+    # impact 안 article_id 모아 articles 테이블 일괄 조회
+    impact = payload.get("impact", {}) or {}
+    aids = set()
+    for c in impact.get("top5_commentary", []) or []:
+        if c.get("article_id"):
+            aids.add(int(c["article_id"]))
+    for c in impact.get("company_group_top10", []) or []:
+        if c.get("article_id"):
+            aids.add(int(c["article_id"]))
+    for c in impact.get("industry_top10", []) or []:
+        if c.get("article_id"):
+            aids.add(int(c["article_id"]))
+
+    articles_map = {}
+    if aids:
+        from app.core.repository import get_conn
+        with get_conn() as conn:
+            qmarks = ",".join("?" * len(aids))
+            rows = conn.execute(
+                f"SELECT id, title, press, url, original_url, image_url, "
+                f"       theme_label, tone_classification, pub_date "
+                f"FROM articles WHERE id IN ({qmarks})",
+                tuple(aids),
+            ).fetchall()
+            for r in rows:
+                articles_map[r["id"]] = dict(r)
+
     return templates.TemplateResponse(
         "public/report.html",
-        {"request": request, "active": "report"},
+        {
+            "request": request,
+            "active": "report",
+            "report": target,
+            "payload": payload,
+            "impact": impact,
+            "articles_map": articles_map,
+            "recent": recent,
+            "selected_date": (target or {}).get("report_date"),
+            "selected_slot": (target or {}).get("slot"),
+        },
     )
 
 

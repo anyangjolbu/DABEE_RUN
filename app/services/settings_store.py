@@ -30,7 +30,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 
     # Gemini 모델 (STEP-3B-34: 요약은 lite, 톤분석은 flash로 차등 유지)
     "gpt_model_summary": "gemini-flash-lite-latest",
-    "gpt_model_tone":    "gemini-flash-latest",
+    "gpt_model_tone":    "gemini-flash-lite-latest",
 
     # 시스템 프롬프트 (요약용 톤)
     "summary_system_prompt": (

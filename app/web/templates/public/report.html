@@ -1,23 +1,313 @@
 {% extends "base.html" %}
-{% block title %}리포트 — DABEE Run{% endblock %}
+{% block title %}일간 리포트 — DABEE Run{% endblock %}
+
+{% block head %}
+<style>
+.report-page { padding: 24px 0 80px; }
+.report-page .container { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+
+.rp-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.rp-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.rp-title h2 { margin: 0; font-size: 22px; font-weight: 700; }
+.rp-slot-badge {
+  display: inline-flex; align-items: center; padding: 4px 12px;
+  border-radius: 999px; font-size: 12px; font-weight: 600; letter-spacing: 0.3px;
+}
+.rp-slot-badge.morning { background: #fff3cd; color: #856404; }
+.rp-slot-badge.evening { background: #1e3a5f; color: #ffd; }
+
+.rp-meta { font-size: 13px; color: #666; display: flex; gap: 16px; flex-wrap: wrap; }
+.rp-meta span { white-space: nowrap; }
+.rp-meta strong { color: #333; }
+
+.rp-nav { display: flex; gap: 6px; flex-wrap: wrap; }
+.rp-nav a, .rp-nav .nav-disabled {
+  display: inline-flex; align-items: center; padding: 6px 12px; border-radius: 6px;
+  font-size: 12px; font-weight: 500; text-decoration: none;
+  background: #f3f4f6; color: #444; border: 1px solid #e5e7eb;
+}
+.rp-nav a.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+.rp-nav a:hover { background: #e5e7eb; }
+.rp-nav .nav-disabled { opacity: 0.4; cursor: not-allowed; }
+
+.rp-section { margin-top: 32px; }
+.rp-section-title { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid #e5e7eb; }
+.rp-section-title h3 { margin: 0; font-size: 16px; font-weight: 700; color: #111; }
+.rp-section-title .count { font-size: 12px; color: #888; font-weight: 500; }
+
+.rp-cards { display: grid; gap: 12px; }
+
+.rp-card {
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+  padding: 16px; transition: box-shadow .15s;
+}
+.rp-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+
+.rp-card-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.rp-marker {
+  flex: 0 0 auto; min-width: 40px; height: 28px; padding: 0 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #1f2937; color: #fff;
+  border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 13px;
+}
+.rp-score-badge {
+  flex: 0 0 auto; min-width: 44px; height: 26px; padding: 0 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #f1f5f9; color: #334155;
+  border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 12px;
+}
+.rp-score-badge.high { background: #dcfce7; color: #15803d; }
+.rp-score-badge.mid { background: #fef3c7; color: #a16207; }
+
+.rp-card-body { flex: 1; min-width: 0; }
+.rp-press {
+  display: inline-block; font-size: 11px; font-weight: 600; color: #6b7280;
+  background: #f3f4f6; padding: 2px 8px; border-radius: 4px; margin-bottom: 6px;
+}
+.rp-tone-badge {
+  display: inline-block; font-size: 10px; font-weight: 600;
+  padding: 2px 6px; border-radius: 3px; margin-left: 4px;
+}
+.rp-tone-badge.bad { background: #fee2e2; color: #b91c1c; }
+.rp-tone-badge.good { background: #dcfce7; color: #15803d; }
+
+.rp-card-title {
+  display: block; font-size: 15px; font-weight: 600; line-height: 1.4;
+  color: #111; text-decoration: none; margin: 4px 0;
+}
+.rp-card-title:hover { color: #2563eb; text-decoration: underline; }
+.rp-card-comment {
+  margin-top: 8px; padding: 10px 12px; background: #f8fafc;
+  border-left: 3px solid #2563eb; border-radius: 0 6px 6px 0;
+  font-size: 13.5px; line-height: 1.55; color: #374151;
+}
+.rp-card-thumb {
+  flex: 0 0 80px; width: 80px; height: 60px; border-radius: 6px;
+  object-fit: cover; background: #f3f4f6;
+}
+
+.rp-list { display: grid; gap: 8px; }
+.rp-list-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; background: #fff; border: 1px solid #e5e7eb;
+  border-radius: 8px; transition: background .12s;
+}
+.rp-list-item:hover { background: #f9fafb; }
+.rp-list-rank {
+  flex: 0 0 28px; font-family: 'JetBrains Mono', monospace;
+  font-weight: 700; font-size: 13px; color: #9ca3af; text-align: center;
+}
+.rp-list-body { flex: 1; min-width: 0; }
+.rp-list-title {
+  display: block; font-size: 14px; font-weight: 500; color: #111;
+  text-decoration: none; line-height: 1.4;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rp-list-title:hover { color: #2563eb; }
+.rp-list-meta { font-size: 11.5px; color: #6b7280; margin-top: 2px; }
+
+.rp-empty { text-align: center; padding: 60px 20px; color: #888; }
+.rp-empty h3 { font-size: 16px; margin-bottom: 8px; color: #555; }
+
+.rp-pagebar { margin-top: 28px; padding: 16px; background: #f9fafb; border-radius: 8px; }
+.rp-pagebar h4 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: #555; }
+.rp-pagebar-list { display: flex; gap: 6px; flex-wrap: wrap; }
+.rp-pagebar-item {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; background: #fff; border: 1px solid #e5e7eb;
+  border-radius: 6px; font-size: 11.5px; color: #555; text-decoration: none;
+}
+.rp-pagebar-item:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
+.rp-pagebar-item.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+.rp-pagebar-item .slot-tag {
+  font-size: 10px; padding: 1px 5px; border-radius: 3px;
+  background: #e5e7eb; color: #555;
+}
+.rp-pagebar-item.active .slot-tag { background: rgba(255,255,255,0.25); color: #fff; }
+
+@media (max-width: 600px) {
+  .rp-card-head { flex-wrap: wrap; }
+  .rp-card-thumb { order: 99; width: 100%; height: 140px; flex: 0 0 auto; }
+  .rp-list-meta { display: none; }
+}
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="report-page">
   <div class="container">
-    <div class="report-page-header">
-      <h2>일간 리포트</h2>
-      <p class="muted">매일 지정 시각에 발송되는 주요 뉴스 요약입니다.</p>
-    </div>
 
-    <div id="emptyMsg" class="muted" style="display:none;text-align:center;padding:48px;">
-      아직 발송된 리포트가 없습니다.
-    </div>
+    {% if not report %}
+      <div class="rp-empty">
+        <h3>발송된 리포트가 없습니다</h3>
+        <p class="muted">매일 06:00, 18:00 KST에 자동 발송됩니다.</p>
+      </div>
+    {% else %}
 
-    <div id="reportList"></div>
+      <div class="rp-toolbar">
+        <div class="rp-title">
+          <h2>{{ selected_date }}</h2>
+          <span class="rp-slot-badge {{ selected_slot }}">
+            {% if selected_slot == 'morning' %}MORNING{% else %}EVENING{% endif %}
+          </span>
+        </div>
+
+        <div class="rp-nav">
+          {% set ns = namespace(cur_idx=-1) %}
+          {% for r in recent %}
+            {% if r.report_date == selected_date and r.slot == selected_slot %}
+              {% set ns.cur_idx = loop.index0 %}
+            {% endif %}
+          {% endfor %}
+          {% if ns.cur_idx >= 0 and ns.cur_idx + 1 < recent | length %}
+            {% set prev_r = recent[ns.cur_idx + 1] %}
+            <a href="/report?date={{ prev_r.report_date }}&slot={{ prev_r.slot }}">← 이전</a>
+          {% else %}
+            <span class="nav-disabled">← 이전</span>
+          {% endif %}
+          {% if ns.cur_idx > 0 %}
+            {% set next_r = recent[ns.cur_idx - 1] %}
+            <a href="/report?date={{ next_r.report_date }}&slot={{ next_r.slot }}">다음 →</a>
+          {% else %}
+            <span class="nav-disabled">다음 →</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="rp-meta">
+        {% if payload.window %}
+          <span><strong>기간:</strong>
+            {{ payload.window[0] | replace('T', ' ') | replace('+09:00', '') }}
+            ~
+            {{ payload.window[1] | replace('T', ' ') | replace('+09:00', '') }}
+          </span>
+        {% endif %}
+        {% if report.recipients_count is defined %}
+          <span><strong>발송:</strong> {{ report.recipients_count }}명</span>
+        {% endif %}
+        {% if report.sent_at %}
+          <span><strong>발송시각:</strong> {{ report.sent_at }}</span>
+        {% endif %}
+      </div>
+
+      {% if impact.top5_commentary %}
+      <div class="rp-section">
+        <div class="rp-section-title">
+          <h3>핵심 코멘터리</h3>
+          <span class="count">TOP {{ impact.top5_commentary | length }}</span>
+        </div>
+        <div class="rp-cards">
+          {% for c in impact.top5_commentary %}
+            {% set art = articles_map.get(c.article_id) %}
+            <div class="rp-card">
+              <div class="rp-card-head">
+                <span class="rp-marker">{{ '+' * (c.marker_count or loop.index) }}</span>
+                <div class="rp-card-body">
+                  {% if art %}
+                    <span class="rp-press">{{ art.press or '?' }}</span>
+                    {% if art.tone_classification == '비우호' %}
+                      <span class="rp-tone-badge bad">비우호</span>
+                    {% elif art.tone_classification == '양호' %}
+                      <span class="rp-tone-badge good">양호</span>
+                    {% endif %}
+                    <a class="rp-card-title" href="{{ art.url or art.original_url }}" target="_blank" rel="noopener">
+                      {{ art.title }}
+                    </a>
+                  {% else %}
+                    <span class="rp-press">기사 ID {{ c.article_id }}</span>
+                    <span class="rp-card-title">(기사 정보 없음)</span>
+                  {% endif %}
+                </div>
+                {% if art and art.image_url %}
+                  <img class="rp-card-thumb" src="{{ art.image_url }}" alt="" loading="lazy" onerror="this.style.display='none'">
+                {% endif %}
+              </div>
+              {% if c.comment %}
+                <div class="rp-card-comment">{{ c.comment }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if impact.company_group_top10 %}
+      <div class="rp-section">
+        <div class="rp-section-title">
+          <h3>당사·그룹 관련</h3>
+          <span class="count">TOP {{ impact.company_group_top10 | length }}</span>
+        </div>
+        <div class="rp-list">
+          {% for c in impact.company_group_top10 %}
+            {% set art = articles_map.get(c.article_id) %}
+            <div class="rp-list-item">
+              <span class="rp-list-rank">{{ loop.index }}</span>
+              {% set sc = c.score or 0 %}
+              <span class="rp-score-badge {% if sc >= 90 %}high{% elif sc >= 80 %}mid{% endif %}">{{ sc }}</span>
+              <div class="rp-list-body">
+                {% if art %}
+                  <a class="rp-list-title" href="{{ art.url or art.original_url }}" target="_blank" rel="noopener">{{ art.title }}</a>
+                  <div class="rp-list-meta">
+                    <span>{{ art.press or '?' }}</span>
+                    {% if art.tone_classification == '비우호' %} · <span style="color:#b91c1c;">비우호</span>{% endif %}
+                    {% if art.theme_label %} · {{ art.theme_label }}{% endif %}
+                  </div>
+                {% else %}
+                  <span class="rp-list-title">(기사 ID {{ c.article_id }} 정보 없음)</span>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if impact.industry_top10 %}
+      <div class="rp-section">
+        <div class="rp-section-title">
+          <h3>업계 동향</h3>
+          <span class="count">TOP {{ impact.industry_top10 | length }}</span>
+        </div>
+        <div class="rp-list">
+          {% for c in impact.industry_top10 %}
+            {% set art = articles_map.get(c.article_id) %}
+            <div class="rp-list-item">
+              <span class="rp-list-rank">{{ loop.index }}</span>
+              {% set sc = c.score or 0 %}
+              <span class="rp-score-badge {% if sc >= 90 %}high{% elif sc >= 80 %}mid{% endif %}">{{ sc }}</span>
+              <div class="rp-list-body">
+                {% if art %}
+                  <a class="rp-list-title" href="{{ art.url or art.original_url }}" target="_blank" rel="noopener">{{ art.title }}</a>
+                  <div class="rp-list-meta">
+                    <span>{{ art.press or '?' }}</span>
+                    {% if art.theme_label %} · {{ art.theme_label }}{% endif %}
+                  </div>
+                {% else %}
+                  <span class="rp-list-title">(기사 ID {{ c.article_id }} 정보 없음)</span>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if recent | length > 1 %}
+      <div class="rp-pagebar">
+        <h4>최근 리포트</h4>
+        <div class="rp-pagebar-list">
+          {% for r in recent %}
+            <a href="/report?date={{ r.report_date }}&slot={{ r.slot }}"
+               class="rp-pagebar-item {% if r.report_date == selected_date and r.slot == selected_slot %}active{% endif %}">
+              {{ r.report_date }}
+              <span class="slot-tag">{% if r.slot == 'morning' %}AM{% else %}PM{% endif %}</span>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+    {% endif %}
   </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script src="/static/js/report.js"></script>
 {% endblock %}

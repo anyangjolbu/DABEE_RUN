@@ -22,7 +22,7 @@ from app.services.gemini_client import get_client
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "gemini-flash-latest"
+DEFAULT_MODEL = "gemini-flash-lite-latest"
 MAX_OUTPUT_TOKEN = 8192
 RETRY_MAX = 3
 RETRY_DELAY = 2

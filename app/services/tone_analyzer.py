@@ -239,7 +239,7 @@ def analyze_tone(article: dict, theme_label: str, settings: dict) -> dict:
     if body and len(body) > BODY_LIMIT:
         body = _extract_relevant_section(body, BODY_LIMIT)
 
-    model = settings.get("gpt_model_tone", "gemini-flash-latest")
+    model = settings.get("gpt_model_tone", "gemini-flash-lite-latest")
 
     if body:
         content = f"제목: {title}\n\n본문:\n{body[:BODY_LIMIT]}"
