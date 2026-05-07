@@ -57,13 +57,30 @@ def reanalyze_unanalyzed(limit: int = 50) -> dict:
 
     for r in rows:
         d = dict(r)
-        url = d["original_url"] or d["url"]
+        # 네이버 URL 1순위 (DB의 url) → 원문 fallback (original_url)
+        naver_url = d["url"] or ""
+        orig_url = d["original_url"] or ""
         try:
-            body, _image = fetch_body_full(url)
+            body, _image = ("", "")
+            if naver_url:
+                body, _image = fetch_body_full(naver_url)
+            if (not body or len(body) < 150) and orig_url and orig_url != naver_url:
+                body2, _ = fetch_body_full(orig_url)
+                if body2 and len(body2) >= 150:
+                    body = body2
+            # 3-Tier fallback: 본문 실패 시 description으로 재분석
+            desc = d["description"] or ""
+            if not body or len(body) < 150:
+                if len(desc) >= 50:
+                    logger.info(f"  📝 재분석 본문 부족({len(body)}자) → description({len(desc)}자) fallback")
+                    body = desc
+                else:
+                    logger.info(f"  ⚠️ 본문·desc 모두 부족, 보류: {(naver_url or orig_url)[:60]}")
+                    continue
             article = {
                 "title":         d["title"],
                 "description":   d["description"],
-                "_crawled_body": body or "",
+                "_crawled_body": body,
             }
             result = analyze_tone(article, d["theme_label"] or "", settings)
             cls = result.get("classification", "미분석")

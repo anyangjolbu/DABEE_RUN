@@ -120,29 +120,65 @@ def run_once(dry_run: bool = False,
             monitor_cnt += 1
 
             # 본문 + 이미지 크롤링 (1회 HTTP 요청)
-            url = article.get("originallink") or article.get("link", "")
-            body, image_url = crawler.fetch_body_full(url)
+            # 네이버 URL 1순위 → #dic_area 일관성 / 실패 시 원문 fallback
+            naver_url = article.get("link", "")
+            orig_url = article.get("originallink", "")
+            body, image_url = ("", "")
+            if naver_url:
+                body, image_url = crawler.fetch_body_full(naver_url)
+            if (not body or len(body) < 150) and orig_url and orig_url != naver_url:
+                logger.info(f"  🔁 네이버 본문 부족 → 원문 재시도: {orig_url[:60]}")
+                body2, image_url2 = crawler.fetch_body_full(orig_url)
+                if body2 and len(body2) >= 150:
+                    body = body2
+                if not image_url:
+                    image_url = image_url2
             if body:
                 article["_crawled_body"] = body
             if image_url:
                 article["image_url"] = image_url
 
-            # 톤 분류
-            tone = tone_analyzer.analyze_tone(article, theme_label, settings)
+            # 3-Tier fallback: 본문 실패 시 description으로 톤분석
+            # (description은 네이버 API 직접 제공값 → 연관기사 오염 없음)
+            if not body or len(body) < 150:
+                desc = article.get("description", "") or ""
+                if len(desc) >= 50:
+                    logger.info(f"  📝 본문 부족({len(body)}자) → description({len(desc)}자) fallback: {article.get('press','?')}")
+                    article["_crawled_body"] = desc  # description을 본문 대신
+                    tone = tone_analyzer.analyze_tone(article, theme_label, settings)
+                else:
+                    logger.warning(f"  ⚠️ 본문·description 모두 부족 — 미분석: {(naver_url or orig_url)[:60]}")
+                    tone = {
+                        "classification": "미분석",
+                        "reason": f"본문{len(body)}자 description{len(desc)}자 모두 부족",
+                        "confidence": "low",
+                    }
+            else:
+                tone = tone_analyzer.analyze_tone(article, theme_label, settings)
 
             # 요약
             summary = summarizer.summarize(article, settings)
 
         else:  # reference
             # STEP-3B-11: 본문 크롤링 후 SK하이닉스 등 핵심 키워드 등장 시 monitor 승격
-            url = article.get("originallink") or article.get("link", "")
-            body, image_url = crawler.fetch_body_full(url)
+            # reference도 동일하게 네이버 우선 + fallback (승격 판정 정확도)
+            naver_url = article.get("link", "")
+            orig_url = article.get("originallink", "")
+            body, image_url = ("", "")
+            if naver_url:
+                body, image_url = crawler.fetch_body_full(naver_url)
+            if (not body or len(body) < 150) and orig_url and orig_url != naver_url:
+                body2, image_url2 = crawler.fetch_body_full(orig_url)
+                if body2 and len(body2) >= 150:
+                    body = body2
+                if not image_url:
+                    image_url = image_url2
             if body:
                 article["_crawled_body"] = body
             if image_url:
                 article["image_url"] = image_url
 
-            if _body_has_priority_target(body, article.get("title", ""), article.get("description", "")):
+            if body and _body_has_priority_target(body, article.get("title", ""), article.get("description", "")):
                 # 승격: monitor로 처리
                 logger.info(f"  🆙 reference → monitor 승격 (본문에 SK하이닉스 등 등장)")
                 article["track"] = "monitor"

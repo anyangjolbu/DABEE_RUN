@@ -24,6 +24,22 @@ logger = logging.getLogger(__name__)
 
 # ── 본문 셀렉터 우선순위 리스트 ──────────────────────────────────────
 BODY_SELECTORS = [
+    # ── 매체별 정확 셀렉터 (최우선) ──
+    "#dic_area",                       # 네이버 뉴스 PC (1순위 — 매체 통합)
+    "#newsct_article",                 # 네이버 모바일
+    "#articleText",                    # 디지털타임스 dt.co.kr
+    "#article-view-content-div",       # K-CMS 표준 (금강일보, 코리아리포트 등 수십개)
+    "div[itemprop='articleBody']",     # 에너지경제, schema.org 표준
+    ".view-read",                      # 에너지경제 모바일
+    "#article_content",                # 다수 매체 공통
+    "#newsEndContents",                # 매일경제 mk.co.kr
+    "#article_body",                   # 조선·동아 일부
+    "div.news_view",                   # 머니투데이, 이데일리
+    "div.article_body_contents",       # 한국경제
+    "div.viewContent",                 # KBS
+    "div.article_cont",                # 일부 매체
+    "div.newsViewBox",                 # 일부 매체
+    # ── 기존 일반 셀렉터 ──
     "div.article_txt", "div#articleBody", "div.story-news article",
     "article.story-news", "div#article-content", "section.article-body",
     "div.article_body", "div#articletxt", "div.news_cnt_detail_wrap",
@@ -100,7 +116,18 @@ def fetch_body_full(url: str) -> Tuple[str, str]:
             timeout=TIMEOUT,
             allow_redirects=True,
         )
-        resp.encoding = resp.apparent_encoding
+        # ── 인코딩: meta charset > Content-Type > apparent ──
+        ctype = resp.headers.get("Content-Type", "").lower()
+        if "charset=" not in ctype:
+            head_bytes = resp.content[:2048]
+            mcs = re.search(rb'charset=["\']?([\w\-]+)', head_bytes, re.IGNORECASE)
+            if mcs:
+                try:
+                    resp.encoding = mcs.group(1).decode("ascii", errors="ignore")
+                except Exception:
+                    resp.encoding = resp.apparent_encoding
+            else:
+                resp.encoding = resp.apparent_encoding
         logger.info(f"  🌐 HTTP {resp.status_code} | {url[:70]}")
 
         if resp.status_code != 200:
@@ -123,7 +150,9 @@ def fetch_body_full(url: str) -> Tuple[str, str]:
         for tag in soup(REMOVE_TAGS):
             tag.decompose()
 
-        body = _try_selectors(soup) or _try_paragraphs(soup) or _try_full_text(soup)
+        body = _try_selectors(soup)
+        # ❗ paragraphs/full_text fallback 제거: 추천기사·사이드바 텍스트 오염 방지
+        # 본문 셀렉터로 못 잡으면 톤분석 스킵 신호로 빈 문자열 반환
         body = body[:MAX_BODY_LEN].strip()
 
         if len(body) >= MIN_BODY_LEN:
