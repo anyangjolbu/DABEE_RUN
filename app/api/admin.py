@@ -381,3 +381,22 @@ async def inspect_settings_file(_: AdminDep):
         info["parse_error"] = f"{type(e).__name__}: {e}"
 
     return info
+
+@router.post("/api/admin/model-switch")
+async def model_switch(request: Request):
+    """settings.json의 모델 키를 lite-latest로 강제 갱신."""
+    import json
+    from app import config
+    path = str(config.SETTINGS_PATH)
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    data["gpt_model_tone"] = "gemini-flash-lite-latest"
+    data["gpt_model_summary"] = "gemini-flash-lite-latest"
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    return {
+        "ok": True,
+        "path": path,
+        "gpt_model_tone": data["gpt_model_tone"],
+        "gpt_model_summary": data["gpt_model_summary"],
+    }
