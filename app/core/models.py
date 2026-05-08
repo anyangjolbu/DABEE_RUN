@@ -164,12 +164,6 @@ def create_all(conn: sqlite3.Connection) -> None:
         )
         if cur.rowcount:
             logger.info(f"  🔧 receive_monitor 백필: {cur.rowcount}건")
-        # reference 일괄 켜기 (사용자 요청: 기존 전체 1로)
-        cur2 = conn.execute(
-            "UPDATE recipients SET receive_reference = 1 WHERE receive_reference = 0"
-        )
-        if cur2.rowcount:
-            logger.info(f"  🔧 receive_reference 일괄 ON: {cur2.rowcount}건")
     except Exception as e:
         logger.warning(f"  ⚠️ STEP-3B-27 백필 실패: {e}")
 
