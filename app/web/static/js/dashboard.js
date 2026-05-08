@@ -365,18 +365,58 @@ function renderTrendChart(trend) {
     const x = xs(i, trend.length);
     const isToday = i === trend.length - 1;
     
-    // 날짜 라벨
-    const dt = new Date(d.date);
-    const lbl = `${dt.getMonth()+1}/${dt.getDate()}`;
-    const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    txt.setAttribute('x', x);
-    txt.setAttribute('y', H - 8);
-    txt.setAttribute('text-anchor', 'middle');
-    txt.setAttribute('font-size', '10');
-    txt.setAttribute('fill', isToday ? '#111' : '#9CA3AF');
-    txt.setAttribute('font-weight', isToday ? '600' : '400');
-    txt.textContent = lbl;
-    lblG.appendChild(txt);
+      // 날짜 라벨 (요일 + 월/일 두 줄)
+      const dt = new Date(d.date);
+      const dowKor = ['일','월','화','수','목','금','토'][dt.getDay()];
+      const dateLbl = `${dt.getMonth()+1}/${dt.getDate()}`;
+
+      // 1행: 요일
+      const dowTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      dowTxt.setAttribute('x', x);
+      dowTxt.setAttribute('y', H - 20);
+      dowTxt.setAttribute('text-anchor', 'middle');
+      dowTxt.setAttribute('font-size', '10');
+      dowTxt.setAttribute('fill', isToday ? '#111' : '#6B7280');
+      dowTxt.setAttribute('font-weight', isToday ? '700' : '500');
+      dowTxt.textContent = dowKor;
+      lblG.appendChild(dowTxt);
+
+      // 2행: 월/일
+      const dateTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      dateTxt.setAttribute('x', x);
+      dateTxt.setAttribute('y', H - 8);
+      dateTxt.setAttribute('text-anchor', 'middle');
+      dateTxt.setAttribute('font-size', '9');
+      dateTxt.setAttribute('fill', isToday ? '#111' : '#9CA3AF');
+      dateTxt.setAttribute('font-weight', isToday ? '600' : '400');
+      dateTxt.textContent = dateLbl;
+      lblG.appendChild(dateTxt);
+
+      // PR Index 숫자 — 점 근처에 표시
+      const idxTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      idxTxt.setAttribute('x', x);
+      idxTxt.setAttribute('text-anchor', 'middle');
+      idxTxt.setAttribute('font-size', isToday ? '12' : '11');
+      idxTxt.setAttribute('font-weight', isToday ? '700' : '600');
+      idxTxt.setAttribute('font-family', 'JetBrains Mono, monospace');
+      if (d.score === null) {
+        idxTxt.setAttribute('y', zeroY - 8);
+        idxTxt.setAttribute('fill', '#9CA3AF');
+        idxTxt.textContent = '—';
+      } else {
+        const sign = d.score > 0 ? '+' : '';
+        const py = ys(d.score);
+        const labelY = d.score >= 0 ? py - 12 : py + 16;
+        idxTxt.setAttribute('y', labelY);
+        let color = '#6B7280';
+        if (d.score >= 20)        color = '#059669';
+        else if (d.score > 0)     color = '#10B981';
+        else if (d.score <= -20)  color = '#DC2626';
+        else if (d.score < 0)     color = '#F87171';
+        idxTxt.setAttribute('fill', isToday ? '#111' : color);
+        idxTxt.textContent = sign + d.score;
+      }
+      lblG.appendChild(idxTxt);
 
     // 점 (score 있을 때만)
     if (d.score !== null) {
