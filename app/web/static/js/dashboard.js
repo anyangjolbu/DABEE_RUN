@@ -233,7 +233,7 @@ function renderHero(today) {
   } else if (score >= 60) {
     pill.textContent = '오늘의 톤: 긍정 우세';
     pill.className = 'pill positive';
-  } else if (score > -60) {
+  } else if (score >= 40) {
     pill.textContent = '오늘의 톤: 혼조';
     pill.className = 'pill neutral';
   } else {
@@ -247,7 +247,7 @@ function renderHero(today) {
     titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">아직 분석 가능한 기사가 부족합니다</span>';
   } else if (score >= 60) {
     titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">긍정 흐름이 우세합니다</span>';
-  } else if (score > -60) {
+  } else if (score >= 40) {
     titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">긍정·부정 혼조 양상입니다</span>';
   } else {
     titleEl.innerHTML = '오늘의 SK하이닉스 여론은<br><span class="accent">부정 흐름이 우세합니다</span>';
@@ -444,7 +444,7 @@ function renderTrendChart(trend) {
       const reliable = d.n >= 5;
       tooltip.innerHTML = `
         <div class="tt-date">${d.date}</div>
-        <div class="tt-score ${d.score === null ? 'na' : (d.score >= 60 ? 'pos' : d.score > -60 ? 'neu' : 'neg')}">${sign}</div>
+        <div class="tt-score ${d.score === null ? 'na' : (d.score >= 60 ? 'pos' : d.score >= 40 ? 'neu' : 'neg')}">${sign}</div>
         <div class="tt-n">분석 ${d.n}건${reliable ? '' : ' (표본 부족)'}</div>
         <div class="tt-detail">양호 ${d.good} · 비우호 ${d.bad}${d.unknown ? ` · 미분석 ${d.unknown}` : ''}</div>
       `;
