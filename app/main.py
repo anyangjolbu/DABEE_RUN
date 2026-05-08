@@ -173,7 +173,7 @@ async def page_report(
         with get_conn() as conn:
             qmarks = ",".join("?" * len(aids))
             rows = conn.execute(
-                f"SELECT id, title, press, url, original_url, image_url, "
+                f"SELECT id, title, title_clean, press, url, original_url, image_url, "
                 f"       theme_label, tone_classification, pub_date "
                 f"FROM articles WHERE id IN ({qmarks})",
                 tuple(aids),

@@ -211,7 +211,7 @@
                       <span class="rp-tone-badge good">양호</span>
                     {% endif %}
                     <a class="rp-card-title" href="{{ art.url or art.original_url }}" target="_blank" rel="noopener">
-                      {{ art.title }}
+                      {{ art.title_clean or art.title }}
                     </a>
                   {% else %}
                     <span class="rp-press">기사 ID {{ c.article_id }}</span>
@@ -246,7 +246,7 @@
               <span class="rp-score-badge {% if sc >= 90 %}high{% elif sc >= 80 %}mid{% endif %}">{{ sc }}</span>
               <div class="rp-list-body">
                 {% if art %}
-                  <a class="rp-list-title" href="{{ art.url or art.original_url }}" target="_blank" rel="noopener">{{ art.title }}</a>
+                  <a class="rp-list-title" href="{{ art.url or art.original_url }}" target="_blank" rel="noopener">{{ art.title_clean or art.title }}</a>
                   <div class="rp-list-meta">
                     <span>{{ art.press or '?' }}</span>
                     {% if art.tone_classification == '비우호' %} · <span style="color:#b91c1c;">비우호</span>{% endif %}
@@ -277,7 +277,7 @@
               <span class="rp-score-badge {% if sc >= 90 %}high{% elif sc >= 80 %}mid{% endif %}">{{ sc }}</span>
               <div class="rp-list-body">
                 {% if art %}
-                  <a class="rp-list-title" href="{{ art.url or art.original_url }}" target="_blank" rel="noopener">{{ art.title }}</a>
+                  <a class="rp-list-title" href="{{ art.url or art.original_url }}" target="_blank" rel="noopener">{{ art.title_clean or art.title }}</a>
                   <div class="rp-list-meta">
                     <span>{{ art.press or '?' }}</span>
                     {% if art.theme_label %} · {{ art.theme_label }}{% endif %}
