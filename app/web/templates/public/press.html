@@ -1,0 +1,556 @@
+{% extends "base.html" %}
+{% block title %}언론사 분석 — DABEE Run{% endblock %}
+
+{% block head %}
+<style>
+.press-page { padding: 24px 0 80px; }
+.press-page .container { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+
+.pp-toolbar { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; gap:12px; flex-wrap:wrap; }
+.pp-title h2 { margin:0; font-size:22px; font-weight:700; color:#111; letter-spacing:-0.01em; }
+.pp-title .sub { color:#6B7280; font-size:13px; margin-top:4px; }
+.pp-controls { display:flex; gap:8px; flex-wrap:wrap; }
+.pp-controls select {
+  padding:6px 10px; border:1px solid #E5E7EB; border-radius:8px;
+  font-size:13px; background:#fff; color:#111; cursor:pointer; font-family: inherit;
+}
+.pp-controls select:focus { outline:none; border-color:#2563EB; }
+
+.pp-summary { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:14px 0 22px; }
+.pp-card { background:#fff; border:1px solid #E5E7EB; border-radius:10px; padding:14px 16px; }
+.pp-card .lbl { color:#6B7280; font-size:12px; font-weight:600; }
+.pp-card .val { color:#111; font-size:24px; font-weight:700; margin-top:4px; font-variant-numeric: tabular-nums; letter-spacing:-0.02em; }
+.pp-card .val.pos { color:#059669; }
+.pp-card .val.neg { color:#DC2626; }
+.pp-card .val.neu { color:#6B7280; }
+
+.pp-table-wrap { background:#fff; border:1px solid #E5E7EB; border-radius:10px; overflow:hidden; }
+.pp-table { width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed; }
+.pp-table thead th {
+  background:#F9FAFB; color:#6B7280; font-size:11px; font-weight:700;
+  text-align:left; padding:10px 8px; border-bottom:1px solid #E5E7EB;
+  letter-spacing:.02em; white-space:nowrap;
+}
+.pp-table thead th.num { text-align:right; }
+.pp-table thead th.center { text-align:center; }
+.pp-table tbody td {
+  padding:11px 8px; border-bottom:1px solid #F3F4F6;
+  font-size:13px; color:#111; vertical-align:middle; white-space:nowrap;
+}
+.pp-table tbody td.num { text-align:right; font-variant-numeric: tabular-nums; }
+.pp-table tbody td.center { text-align:center; }
+.pp-table tbody tr:last-child td { border-bottom:none; }
+.pp-table tbody tr:hover { background:#FAFBFC; }
+
+.col-rank   { width:42px; }
+.col-press  { width:auto; }
+.col-total  { width:54px; }
+.col-good   { width:60px; }
+.col-bad    { width:60px; }
+.col-unk    { width:60px; }
+.col-rate   { width:70px; }
+.col-pi     { width:70px; }
+.col-spark  { width:130px; }
+.col-detail { width:60px; }
+
+.rank { color:#9CA3AF; font-weight:700; }
+.press-name { font-weight:600; overflow:hidden; text-overflow:ellipsis; }
+
+.pi-cell { font-weight:700; font-variant-numeric: tabular-nums; }
+.pi-pos { color:#059669; }
+.pi-mid { color:#6B7280; }
+.pi-neg { color:#DC2626; }
+.pi-na  { color:#9CA3AF; }
+
+.badge-bad, .badge-good {
+  display:inline-block; min-width:28px; text-align:center;
+  padding:2px 6px; border-radius:4px;
+  font-weight:700; font-size:12px; font-variant-numeric: tabular-nums;
+}
+.badge-bad  { background:#FEE2E2; color:#B91C1C; }
+.badge-good { background:#D1FAE5; color:#047857; }
+
+.spark-svg { display:block; width:120px; height:28px; margin:0 auto; }
+
+.btn-detail {
+  padding:4px 10px; border:1px solid #E5E7EB; background:#fff;
+  border-radius:6px; font-size:12px; cursor:pointer; color:#374151;
+  font-weight:500; font-family:inherit;
+}
+.btn-detail:hover { background:#F3F4F6; border-color:#D1D5DB; }
+
+.section-title { font-size:13px; font-weight:700; color:#6B7280; margin:28px 0 6px; }
+.lowsample-note { color:#9CA3AF; font-size:12px; margin-bottom:10px; }
+.pp-table.low tbody td { color:#9CA3AF; }
+.pp-table.low .badge-bad,
+.pp-table.low .badge-good { opacity:.7; }
+
+.empty { text-align:center; color:#9CA3AF; padding:40px 0; font-size:14px; }
+
+.modal-mask { position:fixed; inset:0; background:rgba(0,0,0,.4); display:none; z-index:50; align-items:center; justify-content:center; padding:20px; }
+.modal-mask.show { display:flex; }
+.modal-box { background:#fff; border-radius:12px; max-width:780px; width:100%; max-height:90vh; overflow:auto; padding:22px 24px; box-shadow:0 20px 50px rgba(0,0,0,.2); }
+.modal-box h3 { margin:0 0 4px; font-size:18px; font-weight:700; }
+.modal-box .meta { color:#6B7280; font-size:12px; margin-bottom:14px; }
+.modal-box .close { float:right; cursor:pointer; color:#9CA3AF; background:none; border:none; font-size:22px; line-height:1; padding:0; }
+.modal-chart { width:100%; height:260px; }
+.modal-legend { margin-top:8px; font-size:12px; color:#6B7280; }
+
+@media (max-width: 880px) { .col-hide-md { display:none; } }
+@media (max-width: 720px) {
+  .pp-summary { grid-template-columns: repeat(2, 1fr); }
+  .col-hide-sm { display:none; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="press-page">
+  <div class="container">
+    <div class="pp-toolbar">
+      <div class="pp-title">
+        <h2>언론사 분석</h2>
+        <div class="sub" id="periodLabel">기간을 불러오는 중…</div>
+      </div>
+      <div class="pp-controls">
+        <select id="rangeSel">
+          <option value="7d">최근 7일</option>
+          <option value="4w" selected>최근 4주</option>
+          <option value="3m">최근 3개월</option>
+        </select>
+        <select id="minnSel">
+          <option value="">표본 자동</option>
+          <option value="3">N≥3</option>
+          <option value="5">N≥5</option>
+          <option value="10">N≥10</option>
+          <option value="20">N≥20</option>
+        </select>
+        <select id="sortSel">
+          <option value="score_asc" selected>PR Index 낮은 순</option>
+          <option value="bad_desc">비우호 건수 많은 순</option>
+          <option value="badrate_desc">비우호율 높은 순</option>
+          <option value="total_desc">총량 많은 순</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="pp-summary">
+      <div class="pp-card"><div class="lbl">분석 언론사</div><div class="val" id="sPressCount">—</div></div>
+      <div class="pp-card"><div class="lbl">총 monitor 기사</div><div class="val" id="sTotal">—</div></div>
+      <div class="pp-card"><div class="lbl">비우호 합계</div><div class="val neg" id="sBad">—</div></div>
+      <div class="pp-card"><div class="lbl">평균 PR Index</div><div class="val" id="sAvg">—</div></div>
+    </div>
+
+    <div class="pp-table-wrap">
+      <table class="pp-table" id="mainTable">
+        <colgroup>
+          <col class="col-rank">
+          <col class="col-press">
+          <col class="col-total">
+          <col class="col-good col-hide-sm">
+          <col class="col-bad">
+          <col class="col-unk col-hide-md">
+          <col class="col-rate col-hide-md">
+          <col class="col-pi">
+          <col class="col-spark col-hide-sm">
+          <col class="col-detail">
+        </colgroup>
+        <thead>
+          <tr>
+            <th class="center">#</th>
+            <th>언론사</th>
+            <th class="num">총</th>
+            <th class="num col-hide-sm">양호</th>
+            <th class="num">비우호</th>
+            <th class="num col-hide-md">미분석</th>
+            <th class="num col-hide-md">비우호율</th>
+            <th class="num">PR Index</th>
+            <th class="center col-hide-sm">추이</th>
+            <th class="center">상세</th>
+          </tr>
+        </thead>
+        <tbody id="mainTbody">
+          <tr><td colspan="10" class="empty">불러오는 중…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section-title" id="lowSampleTitle" style="display:none;">표본 부족</div>
+    <div class="lowsample-note" id="lowSampleNote" style="display:none;"></div>
+    <div class="pp-table-wrap" id="lowWrap" style="display:none;">
+      <table class="pp-table low" id="lowTable">
+        <colgroup>
+          <col class="col-rank">
+          <col class="col-press">
+          <col class="col-total">
+          <col class="col-good col-hide-sm">
+          <col class="col-bad">
+          <col class="col-unk col-hide-md">
+          <col class="col-pi">
+          <col class="col-spark col-hide-sm">
+          <col class="col-detail">
+        </colgroup>
+        <thead>
+          <tr>
+            <th class="center">#</th>
+            <th>언론사</th>
+            <th class="num">총</th>
+            <th class="num col-hide-sm">양호</th>
+            <th class="num">비우호</th>
+            <th class="num col-hide-md">미분석</th>
+            <th class="num">PR Index</th>
+            <th class="center col-hide-sm">추이</th>
+            <th class="center">상세</th>
+          </tr>
+        </thead>
+        <tbody id="lowTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="modalMask">
+  <div class="modal-box">
+    <button class="close" id="modalClose" aria-label="닫기">&times;</button>
+    <h3 id="modalTitle">언론사</h3>
+    <div class="meta" id="modalMeta">—</div>
+    <svg class="modal-chart" id="modalChart" viewBox="0 0 720 260" preserveAspectRatio="none"></svg>
+    <div class="modal-legend">
+      <span style="display:inline-block;width:10px;height:10px;background:#10B981;vertical-align:middle;margin-right:4px;"></span>양호
+      <span style="display:inline-block;width:10px;height:10px;background:#EF4444;vertical-align:middle;margin:0 4px 0 12px;"></span>비우호
+      <span style="display:inline-block;width:18px;height:2px;background:#111;vertical-align:middle;margin:0 4px 0 12px;"></span>PR Index
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString());
+const SVGNS = "http://www.w3.org/2000/svg";
+
+function piClass(s) {
+  if (s == null) return "pi-na";
+  if (s >= 60)   return "pi-pos";
+  if (s >= 40)   return "pi-mid";
+  return "pi-neg";
+}
+function piText(s) { return s == null ? "—" : (s > 0 ? "+" + s : String(s)); }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+
+function sortItems(items, key) {
+  const arr = items.slice();
+  arr.sort((a, b) => {
+    if (key === "bad_desc")     return b.bad - a.bad;
+    if (key === "badrate_desc") return b.bad_rate - a.bad_rate;
+    if (key === "total_desc")   return b.total - a.total;
+    const av = a.score == null ? 9999 : a.score;
+    const bv = b.score == null ? 9999 : b.score;
+    return av - bv;
+  });
+  return arr;
+}
+
+function renderSparkline(scores) {
+  const W = 120, H = 28, pad = 3;
+  const svg = document.createElementNS(SVGNS, "svg");
+  svg.setAttribute("class", "spark-svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("preserveAspectRatio", "none");
+
+  const n = scores.length;
+  if (n === 0) return svg;
+
+  const yScore = (s) => pad + (H - pad * 2) * (1 - (s + 100) / 200);
+  const y0 = yScore(0);
+  const base = document.createElementNS(SVGNS, "line");
+  base.setAttribute("x1", 0); base.setAttribute("x2", W);
+  base.setAttribute("y1", y0); base.setAttribute("y2", y0);
+  base.setAttribute("stroke", "#E5E7EB");
+  base.setAttribute("stroke-width", "1");
+  svg.appendChild(base);
+
+  const xStep = n > 1 ? (W - pad * 2) / (n - 1) : 0;
+  const pts = scores.map((s, i) => ({
+    x: pad + xStep * i,
+    y: s == null ? null : yScore(s),
+    s,
+  }));
+
+  let segStart = null;
+  for (let i = 0; i < pts.length; i++) {
+    if (pts[i].y == null) { segStart = null; continue; }
+    if (segStart != null) {
+      const a = pts[segStart], b = pts[i];
+      const ln = document.createElementNS(SVGNS, "line");
+      ln.setAttribute("x1", a.x); ln.setAttribute("y1", a.y);
+      ln.setAttribute("x2", b.x); ln.setAttribute("y2", b.y);
+      ln.setAttribute("stroke", "#2563EB");
+      ln.setAttribute("stroke-width", "1.5");
+      ln.setAttribute("stroke-linecap", "round");
+      svg.appendChild(ln);
+    }
+    segStart = i;
+  }
+  pts.forEach(p => {
+    if (p.y == null) return;
+    const c = document.createElementNS(SVGNS, "circle");
+    c.setAttribute("cx", p.x); c.setAttribute("cy", p.y);
+    c.setAttribute("r", 2);
+    const col = p.s >= 60 ? "#059669" : p.s >= 40 ? "#6B7280" : "#DC2626";
+    c.setAttribute("fill", col);
+    svg.appendChild(c);
+  });
+  for (let i = pts.length - 1; i >= 0; i--) {
+    if (pts[i].y != null) {
+      const c = document.createElementNS(SVGNS, "circle");
+      c.setAttribute("cx", pts[i].x); c.setAttribute("cy", pts[i].y);
+      c.setAttribute("r", 3);
+      c.setAttribute("fill", "#111");
+      svg.appendChild(c);
+      break;
+    }
+  }
+  return svg;
+}
+
+function renderRow(it, idx, low=false) {
+  const tr = document.createElement("tr");
+
+  const td_rank = document.createElement("td");
+  td_rank.className = "rank center";
+  td_rank.textContent = idx + 1;
+
+  const td_name = document.createElement("td");
+  td_name.className = "press-name";
+  td_name.textContent = it.press;
+  td_name.title = it.press;
+
+  const td_total = document.createElement("td");
+  td_total.className = "num";
+  td_total.textContent = fmt(it.total);
+
+  const td_good = document.createElement("td");
+  td_good.className = "num col-hide-sm";
+  td_good.innerHTML = `<span class="badge-good">${fmt(it.good)}</span>`;
+
+  const td_bad = document.createElement("td");
+  td_bad.className = "num";
+  td_bad.innerHTML = `<span class="badge-bad">${fmt(it.bad)}</span>`;
+
+  const td_unk = document.createElement("td");
+  td_unk.className = "num col-hide-md";
+  td_unk.textContent = fmt(it.unknown);
+
+  const td_pi = document.createElement("td");
+  td_pi.className = "num pi-cell " + piClass(it.score);
+  td_pi.textContent = piText(it.score);
+
+  const td_spark = document.createElement("td");
+  td_spark.className = "center col-hide-sm";
+  if (Array.isArray(it.sparkline) && it.sparkline.length > 0) {
+    td_spark.appendChild(renderSparkline(it.sparkline));
+  } else {
+    td_spark.textContent = "—";
+  }
+
+  const td_detail = document.createElement("td");
+  td_detail.className = "center";
+  td_detail.innerHTML = `<button class="btn-detail" data-press="${escapeHtml(it.press)}">추이</button>`;
+
+  tr.appendChild(td_rank);
+  tr.appendChild(td_name);
+  tr.appendChild(td_total);
+  tr.appendChild(td_good);
+  tr.appendChild(td_bad);
+  tr.appendChild(td_unk);
+
+  if (!low) {
+    const td_rate = document.createElement("td");
+    td_rate.className = "num col-hide-md";
+    td_rate.textContent = it.bad_rate.toFixed(1) + "%";
+    tr.appendChild(td_rate);
+  }
+
+  tr.appendChild(td_pi);
+  tr.appendChild(td_spark);
+  tr.appendChild(td_detail);
+
+  return tr;
+}
+
+async function loadStats() {
+  const range = $("rangeSel").value;
+  const minn  = $("minnSel").value;
+  const sort  = $("sortSel").value;
+  const url = `/api/press/stats?range=${range}` + (minn ? `&min_n=${minn}` : "");
+
+  $("mainTbody").innerHTML = `<tr><td colspan="10" class="empty">불러오는 중…</td></tr>`;
+  $("lowWrap").style.display = "none";
+  $("lowSampleTitle").style.display = "none";
+  $("lowSampleNote").style.display = "none";
+
+  let data;
+  try {
+    const r = await fetch(url, { credentials: "same-origin" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    data = await r.json();
+  } catch (e) {
+    $("mainTbody").innerHTML = `<tr><td colspan="10" class="empty">불러오기 실패: ${e.message}</td></tr>`;
+    return;
+  }
+
+  $("periodLabel").textContent = `${data.start} ~ ${data.end}  ·  표본 임계값 N≥${data.min_n}`;
+  $("sPressCount").textContent = fmt(data.summary.press_count);
+  $("sTotal").textContent      = fmt(data.summary.total);
+  $("sBad").textContent        = fmt(data.summary.bad);
+  const avg = data.summary.avg_score;
+  const sAvg = $("sAvg");
+  sAvg.textContent = piText(avg);
+  sAvg.classList.remove("pos","neg","neu");
+  sAvg.classList.add(avg == null ? "neu" : (avg >= 60 ? "pos" : (avg >= 40 ? "neu" : "neg")));
+
+  const reliable = data.items.filter(x => x.reliable);
+  const low      = data.items.filter(x => !x.reliable);
+
+  const sorted = sortItems(reliable, sort);
+  const tbody = $("mainTbody");
+  tbody.innerHTML = "";
+  if (sorted.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" class="empty">조건에 맞는 언론사가 없습니다.</td></tr>`;
+  } else {
+    sorted.forEach((it, i) => tbody.appendChild(renderRow(it, i, false)));
+  }
+
+  if (low.length > 0) {
+    $("lowSampleTitle").style.display = "";
+    $("lowSampleNote").style.display = "";
+    $("lowSampleNote").textContent = `분석 기사 수(양호+비우호) < ${data.min_n} 인 언론사 ${low.length}곳`;
+    $("lowWrap").style.display = "";
+    const lowSorted = low.slice().sort((a,b) => b.total - a.total);
+    const lt = $("lowTbody");
+    lt.innerHTML = "";
+    lowSorted.forEach((it, i) => lt.appendChild(renderRow(it, i, true)));
+  }
+
+  document.querySelectorAll(".btn-detail").forEach(btn => {
+    btn.addEventListener("click", () => openDetail(btn.dataset.press));
+  });
+}
+
+async function openDetail(press) {
+  $("modalTitle").textContent = press;
+  $("modalMeta").textContent = "불러오는 중…";
+  $("modalChart").innerHTML = "";
+  $("modalMask").classList.add("show");
+
+  const range = $("rangeSel").value;
+  try {
+    const r = await fetch(`/api/press/trend?press=${encodeURIComponent(press)}&range=${range}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    const unit = data.bucket === "day" ? "일" : "주";
+    $("modalMeta").textContent = `${data.buckets.length}개 ${unit} bucket · 범위 ${range}`;
+    drawTrend(data.buckets);
+  } catch (e) {
+    $("modalMeta").textContent = `오류: ${e.message}`;
+  }
+}
+
+function drawTrend(buckets) {
+  const W = 720, H = 260;
+  const pad = { l: 36, r: 36, t: 16, b: 30 };
+  const svg = $("modalChart");
+  svg.innerHTML = "";
+  if (!buckets.length) return;
+
+  const innerW = W - pad.l - pad.r;
+  const innerH = H - pad.t - pad.b;
+  const n = buckets.length;
+  const slot = innerW / n;
+  const maxCount = Math.max(1, ...buckets.map(b => Math.max(b.good, b.bad)));
+
+  const yScore = (s) => pad.t + innerH * (1 - (s + 100) / 200);
+  const yCount = (c) => pad.t + innerH * (1 - c / maxCount);
+
+  [-100, 0, 100].forEach(v => {
+    const y = yScore(v);
+    const ln = document.createElementNS(SVGNS, "line");
+    ln.setAttribute("x1", pad.l); ln.setAttribute("x2", W - pad.r);
+    ln.setAttribute("y1", y); ln.setAttribute("y2", y);
+    ln.setAttribute("stroke", v === 0 ? "#9CA3AF" : "#E5E7EB");
+    ln.setAttribute("stroke-dasharray", v === 0 ? "0" : "3,3");
+    svg.appendChild(ln);
+    const tx = document.createElementNS(SVGNS,"text");
+    tx.setAttribute("x", 4); tx.setAttribute("y", y + 3);
+    tx.setAttribute("font-size","9"); tx.setAttribute("fill","#9CA3AF");
+    tx.textContent = (v > 0 ? "+" : "") + v;
+    svg.appendChild(tx);
+  });
+
+  buckets.forEach((b, i) => {
+    const cx = pad.l + slot * i + slot / 2;
+    const bw = Math.min(28, slot * 0.35);
+    const xg = cx - bw - 1;
+    const xb = cx + 1;
+    const y0 = pad.t + innerH;
+    if (b.good > 0) {
+      const r1 = document.createElementNS(SVGNS,"rect");
+      r1.setAttribute("x", xg); r1.setAttribute("y", yCount(b.good));
+      r1.setAttribute("width", bw); r1.setAttribute("height", y0 - yCount(b.good));
+      r1.setAttribute("fill", "#10B981"); r1.setAttribute("opacity", "0.55");
+      svg.appendChild(r1);
+    }
+    if (b.bad > 0) {
+      const r2 = document.createElementNS(SVGNS,"rect");
+      r2.setAttribute("x", xb); r2.setAttribute("y", yCount(b.bad));
+      r2.setAttribute("width", bw); r2.setAttribute("height", y0 - yCount(b.bad));
+      r2.setAttribute("fill", "#EF4444"); r2.setAttribute("opacity", "0.55");
+      svg.appendChild(r2);
+    }
+    const tx = document.createElementNS(SVGNS,"text");
+    tx.setAttribute("x", cx); tx.setAttribute("y", H - pad.b + 16);
+    tx.setAttribute("font-size", "10"); tx.setAttribute("fill", "#6B7280");
+    tx.setAttribute("text-anchor", "middle");
+    tx.textContent = b.label;
+    svg.appendChild(tx);
+  });
+
+  let segStart = null;
+  const pts = buckets.map((b, i) => ({
+    x: pad.l + slot * i + slot / 2,
+    y: b.score == null ? null : yScore(b.score),
+    s: b.score,
+  }));
+  for (let i = 0; i < pts.length; i++) {
+    if (pts[i].y == null) { segStart = null; continue; }
+    if (segStart != null) {
+      const a = pts[segStart], c = pts[i];
+      const ln = document.createElementNS(SVGNS,"line");
+      ln.setAttribute("x1", a.x); ln.setAttribute("y1", a.y);
+      ln.setAttribute("x2", c.x); ln.setAttribute("y2", c.y);
+      ln.setAttribute("stroke", "#111"); ln.setAttribute("stroke-width", "2");
+      svg.appendChild(ln);
+    }
+    segStart = i;
+    const cir = document.createElementNS(SVGNS,"circle");
+    cir.setAttribute("cx", pts[i].x); cir.setAttribute("cy", pts[i].y);
+    cir.setAttribute("r", 3.5); cir.setAttribute("fill", "#111");
+    svg.appendChild(cir);
+    const lbl = document.createElementNS(SVGNS,"text");
+    lbl.setAttribute("x", pts[i].x); lbl.setAttribute("y", pts[i].y - 8);
+    lbl.setAttribute("font-size", "10"); lbl.setAttribute("fill", "#111");
+    lbl.setAttribute("text-anchor", "middle"); lbl.setAttribute("font-weight","700");
+    lbl.textContent = (pts[i].s > 0 ? "+" : "") + pts[i].s;
+    svg.appendChild(lbl);
+  }
+}
+
+document.getElementById("modalClose").addEventListener("click", () => document.getElementById("modalMask").classList.remove("show"));
+document.getElementById("modalMask").addEventListener("click", (e) => { if (e.target === document.getElementById("modalMask")) document.getElementById("modalMask").classList.remove("show"); });
+["rangeSel","minnSel","sortSel"].forEach(id => document.getElementById(id).addEventListener("change", loadStats));
+
+loadStats();
+</script>
+{% endblock %}
