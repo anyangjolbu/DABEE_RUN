@@ -197,6 +197,16 @@ async def page_report(
     )
 
 
+
+
+@app.get("/press", response_class=HTMLResponse)
+async def page_press(request: Request):
+    return templates.TemplateResponse(
+        "public/press.html",
+        {"request": request, "active": "press"},
+    )
+
+
 # ── 관리자 페이지 ──────────────────────────────────────────────
 @app.get("/admin/login", response_class=HTMLResponse)
 async def admin_login_page(request: Request):
