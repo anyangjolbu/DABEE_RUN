@@ -48,7 +48,7 @@ PRESS_MAP: dict[str, str] = {
     "dt.co.kr":           "디지털타임스",
     "ddaily.co.kr":       "디지털데일리",
     "inews24.com":        "아이뉴스24",
-    "thelec.kr":          "더일렉",
+    "thelec.kr":          "디일렉",
     "aitimes.com":        "AI타임스",
     "aitimes.kr":         "AI타임스",
 
