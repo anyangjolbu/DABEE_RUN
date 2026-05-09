@@ -190,7 +190,12 @@ def run_once(dry_run: bool = False,
             else:
                 # 일반 reference: 톤 분석 없이 '참고'로 저장
                 reference_cnt += 1
-                summary = summarizer.summarize(article, settings)
+                # STEP-COST-1: reference는 LLM 요약 스킵 → description 재사용
+                _desc = article.get('description', '') or ''
+                _desc = re.sub(r'<[^>]+>', '', _desc).strip()
+                if not _desc:
+                    _desc = re.sub(r'<[^>]+>', '', article.get('title', '') or '').strip()
+                summary = _desc or '(요약 없음)'
                 tone = {
                     "classification": "참고",
                     "reason":         "참고 트랙 (본문에 SK하이닉스 미등장)",
