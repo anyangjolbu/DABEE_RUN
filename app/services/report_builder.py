@@ -297,13 +297,17 @@ def _build_message_inner(slot, date_str, commentary, company_top, industry_top, 
 # ──────────────────────────────────────────────────────────────
 
 def run_slot_report(slot: str, date_str: Optional[str] = None,
-                    base_dt: Optional[datetime] = None) -> dict:
+                    base_dt: Optional[datetime] = None,
+                    force: bool = False,
+                    skip_telegram: bool = False) -> dict:
     """슬롯별 리포트 실행.
 
     Args:
         slot: 'morning' | 'evening'
         date_str: 발송 기준 날짜 (YYYY-MM-DD KST). None이면 base_dt 또는 now.
         base_dt: 윈도우 계산 기준 시각. None이면 now.
+        force: True면 이미 저장된 리포트가 있어도 재생성(payload 덮어씀).
+        skip_telegram: True면 텔레그램 발송을 건너뛰고 DB 갱신만 수행.
 
     Returns:
         {"slot": str, "date": str, "window": [s,e], "articles": int,
@@ -322,8 +326,8 @@ def run_slot_report(slot: str, date_str: Optional[str] = None,
     if date_str is None:
         date_str = base_dt.strftime("%Y-%m-%d")
 
-    # 중복 발송 방지
-    if repo.report_get(date_str, slot):
+    # 중복 발송 방지 (force=True면 우회)
+    if not force and repo.report_get(date_str, slot):
         logger.info(f"📋 이미 발송된 슬롯: {date_str}/{slot}")
         return {"skipped": True, "slot": slot, "date": date_str}
 
@@ -357,22 +361,27 @@ def run_slot_report(slot: str, date_str: Optional[str] = None,
     recipients = repo.recipient_list_active()
     targets = [r for r in recipients if r.get("receive_daily_report")]
     success = 0
-    for r in targets:
-        ok, err = telegram_sender.send_to_chat(
-            chat_id=r["chat_id"], message=body, disable_preview=True,
-        )
-        if ok:
-            success += 1
-        else:
-            logger.warning(f"📋 발송 실패 → {r.get('chat_id')}: {err}")
+    if skip_telegram:
+        logger.info(f"📋 [{slot}] skip_telegram=True — 발송 건너뜀")
+    else:
+        for r in targets:
+            ok, err = telegram_sender.send_to_chat(
+                chat_id=r["chat_id"], message=body, disable_preview=True,
+            )
+            if ok:
+                success += 1
+            else:
+                logger.warning(f"📋 발송 실패 → {r.get('chat_id')}: {err}")
 
-    # 6. DB 저장
+    # 6. DB 저장 (force 재생성이면 옛 row 제거 후 새로 기록)
     payload = {
         "slot": slot,
         "window": [start_iso, end_iso],
         "categories": {str(k): v for k, v in categories.items()},
         "impact": impact,
     }
+    if force:
+        repo.report_delete(date_str, slot)
     repo.report_save(date_str, slot, body, json.dumps(payload, ensure_ascii=False), success)
 
     logger.info(

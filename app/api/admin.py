@@ -182,6 +182,39 @@ async def stop_scheduler(_: AdminDep):
     await scheduler.stop()
     return {"status": "stopped"}
 
+
+# ── 일간 리포트 재생성 ────────────────────────────────────────
+
+@router.post("/report/regenerate")
+async def regenerate_report(request: Request, _: AdminDep):
+    """슬롯별 일간 리포트 강제 재생성.
+
+    body: {
+        "date": "YYYY-MM-DD",      # 필수
+        "slot": "morning|evening", # 필수
+        "skip_telegram": bool      # 기본 False
+    }
+    """
+    import asyncio
+    from app.services import report_builder
+
+    body = await request.json()
+    date_str = (body.get("date") or "").strip()
+    slot = (body.get("slot") or "").strip()
+    skip_telegram = bool(body.get("skip_telegram", False))
+
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_str):
+        raise HTTPException(status_code=400, detail="date는 YYYY-MM-DD 형식")
+    if slot not in ("morning", "evening"):
+        raise HTTPException(status_code=400, detail="slot은 morning|evening")
+
+    result = await asyncio.to_thread(
+        report_builder.run_slot_report,
+        slot, date_str, None, True, skip_telegram,
+    )
+    return {"ok": True, "result": result}
+
+
 # ── DB 관리 (STEP 3B-1) ──────────────────────────────────────
 
 @router.post("/db/reset")

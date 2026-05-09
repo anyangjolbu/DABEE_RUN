@@ -335,6 +335,16 @@ def report_get(date_str: str, slot: str = "evening") -> Optional[dict]:
     return dict(row) if row else None
 
 
+def report_delete(date_str: str, slot: str) -> int:
+    """슬롯별 리포트 행 삭제. 강제 재생성 시 사용. 삭제된 row 수 반환."""
+    with get_conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM daily_reports WHERE report_date = ? AND slot = ?",
+            (date_str, slot),
+        )
+        return cur.rowcount
+
+
 # ════════════════════════════════════════════════════════════
 #  Admin Sessions
 # ════════════════════════════════════════════════════════════
