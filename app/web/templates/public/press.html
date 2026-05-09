@@ -101,6 +101,11 @@
   .pp-summary { grid-template-columns: repeat(2, 1fr); }
   .col-hide-sm { display:none; }
 }
+@media (max-width: 480px) {
+  .col-hide-xs { display:none; }
+  .pp-table tbody td, .pp-table thead th { padding-left:6px; padding-right:6px; }
+  .pp-table tbody td.press-name { white-space: normal; word-break: keep-all; }
+}
 </style>
 {% endblock %}
 
@@ -146,7 +151,7 @@
         <colgroup>
           <col class="col-rank">
           <col class="col-press">
-          <col class="col-total">
+          <col class="col-total col-hide-xs">
           <col class="col-good col-hide-sm">
           <col class="col-bad">
           <col class="col-unk col-hide-md">
@@ -159,7 +164,7 @@
           <tr>
             <th class="center">#</th>
             <th>언론사</th>
-            <th class="num">총</th>
+            <th class="num col-hide-xs">총</th>
             <th class="num col-hide-sm">양호</th>
             <th class="num">비우호</th>
             <th class="num col-hide-md">미분석</th>
@@ -182,7 +187,7 @@
         <colgroup>
           <col class="col-rank">
           <col class="col-press">
-          <col class="col-total">
+          <col class="col-total col-hide-xs">
           <col class="col-good col-hide-sm">
           <col class="col-bad">
           <col class="col-unk col-hide-md">
@@ -194,7 +199,7 @@
           <tr>
             <th class="center">#</th>
             <th>언론사</th>
-            <th class="num">총</th>
+            <th class="num col-hide-xs">총</th>
             <th class="num col-hide-sm">양호</th>
             <th class="num">비우호</th>
             <th class="num col-hide-md">미분석</th>
@@ -328,7 +333,7 @@ function renderRow(it, idx, low=false) {
   td_name.title = it.press;
 
   const td_total = document.createElement("td");
-  td_total.className = "num";
+  td_total.className = "num col-hide-xs";
   td_total.textContent = fmt(it.total);
 
   const td_good = document.createElement("td");
