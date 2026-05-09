@@ -252,6 +252,41 @@ async def db_stats(_: AdminDep):
     return {"total": total, "distribution": dist}
 
 
+@router.get("/db/inspect/daily-reports")
+async def inspect_daily_reports(_: AdminDep):
+    """daily_reports 테이블의 스키마/인덱스/현재 row를 read-only로 조회.
+
+    morning row 소멸 원인 진단용. 데이터 변경 없음.
+    """
+    from app.core.db import get_conn
+    with get_conn() as conn:
+        cols = [dict(r) for r in conn.execute("PRAGMA table_info(daily_reports)").fetchall()]
+        idx_list = [dict(r) for r in conn.execute("PRAGMA index_list(daily_reports)").fetchall()]
+        idx_info = {}
+        for i in idx_list:
+            name = i["name"]
+            idx_info[name] = [dict(r) for r in conn.execute(f"PRAGMA index_info({name})").fetchall()]
+        create_sql_row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='daily_reports'"
+        ).fetchone()
+        index_sql_rows = [dict(r) for r in conn.execute(
+            "SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name='daily_reports'"
+        ).fetchall()]
+        rows = [dict(r) for r in conn.execute(
+            "SELECT id, report_date, slot, sent_at, recipients_count "
+            "FROM daily_reports ORDER BY id DESC"
+        ).fetchall()]
+    return {
+        "create_sql": dict(create_sql_row)["sql"] if create_sql_row else None,
+        "table_info": cols,
+        "indexes": idx_list,
+        "index_info": idx_info,
+        "index_sql": index_sql_rows,
+        "rows": rows,
+        "row_count": len(rows),
+    }
+
+
 # ── 라이브 로그 — 과거분 tail (STEP-3B-15) ─────────────────────
 
 # monitor.log 라인 파서: "2026-05-04 00:27:13 [INFO] app.services.pipeline — 메시지"
