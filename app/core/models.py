@@ -139,6 +139,54 @@ def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
     return any(r[1] == column for r in rows)
 
 
+def _migrate_daily_reports_unique(conn: sqlite3.Connection) -> None:
+    """daily_reports 테이블 UNIQUE 제약 마이그레이션.
+
+    옛 production 테이블은 ``report_date TEXT UNIQUE NOT NULL`` 단독 제약이라
+    18시 evening의 INSERT OR REPLACE가 같은 날짜의 morning row를 덮어써 소멸시켰다.
+    신 스키마는 ``UNIQUE(report_date, slot)``. 이미 신 스키마면 no-op.
+
+    SQLite는 컬럼 단독 UNIQUE 제거를 지원하지 않으므로 테이블 재생성 패턴을 사용.
+    """
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='daily_reports'"
+    ).fetchone()
+    if not row or not row[0]:
+        return
+    sql_compact = row[0].replace(" ", "").replace("\n", "")
+    if "UNIQUE(report_date,slot)" in sql_compact:
+        return  # 이미 신 스키마
+
+    logger.info("🔧 daily_reports 마이그레이션: report_date 단독 UNIQUE → (report_date, slot) UNIQUE")
+    conn.execute("DROP TABLE IF EXISTS daily_reports_new")
+    conn.execute(
+        """
+        CREATE TABLE daily_reports_new (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_date       TEXT    NOT NULL,
+            slot              TEXT    NOT NULL DEFAULT 'evening',
+            sent_at           TEXT    NOT NULL,
+            body              TEXT,
+            payload_json      TEXT,
+            recipients_count  INTEGER,
+            UNIQUE(report_date, slot)
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO daily_reports_new
+            (id, report_date, slot, sent_at, body, payload_json, recipients_count)
+        SELECT id, report_date, slot, sent_at, body, payload_json, recipients_count
+        FROM daily_reports
+        """
+    )
+    conn.execute("DROP TABLE daily_reports")
+    conn.execute("ALTER TABLE daily_reports_new RENAME TO daily_reports")
+    conn.commit()
+    logger.info("  ✅ daily_reports 마이그레이션 완료")
+
+
 def create_all(conn: sqlite3.Connection) -> None:
     """모든 테이블·인덱스·신규 컬럼을 생성합니다 (이미 존재하면 무시)."""
     for stmt in SCHEMA:
@@ -152,6 +200,12 @@ def create_all(conn: sqlite3.Connection) -> None:
                 logger.info(f"  🔧 ALTER: {table}.{column} 추가")
             except Exception as e:
                 logger.warning(f"  ⚠️ ALTER 실패 {table}.{column}: {e}")
+
+    # 옛 production 호환: report_date 단독 UNIQUE → (report_date, slot)
+    try:
+        _migrate_daily_reports_unique(conn)
+    except Exception as e:
+        logger.warning(f"  ⚠️ daily_reports UNIQUE 마이그레이션 실패: {e}")
 
     for stmt in POST_INDEXES:
         conn.execute(stmt)
