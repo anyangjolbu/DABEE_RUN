@@ -319,7 +319,7 @@ def report_list(limit: int = 30) -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT report_date, slot, sent_at, recipients_count"
-            " FROM daily_reports ORDER BY report_date DESC, slot DESC LIMIT ?",
+            " FROM daily_reports ORDER BY sent_at DESC LIMIT ?",
             (limit,),
         ).fetchall()
     return [dict(r) for r in rows]
