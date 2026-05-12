@@ -120,13 +120,14 @@ def _gemini_classify_batch(batch: list[dict]) -> list[dict]:
         logger.warning("Gemini 미사용 — 모든 기사 통과 처리")
         return batch
 
+    # STEP-REL-1: 제목 + description 요약(150자) 같이 전달
     titles_text = "\n".join(
-        f"{i+1}. {_clean_title(a.get('title', ''))}"
+        f"{i+1}. {_clean_title(a.get('title', ''))} | {_clean_title(a.get('description', ''))[:150]}"
         for i, a in enumerate(batch)
     )
 
     prompt = (
-        "아래 기사 제목 목록을 보고, 각 번호에 대해 판단하시오.\n\n"
+        "아래 기사 목록(번호. 제목 | description요약)을 보고 각 번호에 대해 판단하시오.\n제목이 모호해도 description에 핵심 키워드가 있으면 YES.\n\n"
         "YES로 판단하는 경우:\n"
         "- 반도체, 메모리(HBM·D램·낸드), AI칩, 파운드리 관련\n"
         "- IT 기업(애플·구글·MS·메타·아마존·엔비디아·TSMC 등) 사업·실적\n"
@@ -145,7 +146,7 @@ def _gemini_classify_batch(batch: list[dict]) -> list[dict]:
         resp = client.models.generate_content(
             model="gemini-flash-lite-latest",
             contents=prompt,
-            config={"max_output_tokens": len(batch) * 12, "temperature": 0},
+            config={"max_output_tokens": len(batch) * 15, "temperature": 0},
         )
         answer = resp.text.strip()
     except Exception as e:
