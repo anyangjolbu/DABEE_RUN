@@ -380,6 +380,116 @@ def _fallback(articles: list[dict], categories: dict[int, str]) -> dict:
     }
 
 
+
+# ===== STEP-IMPACT-3: 2-stage LLM =====
+STAGE1_PROMPT = """당신은 SK하이닉스 PR 분석가입니다. 아래 기사 목록을 보고 각 기사가 CEO에게 보고할 만큼 중요한지 0~100점으로 평가합니다.
+
+[점수 기준]
+- 90~100: SK하이닉스/곽노정/솔리다임이 제목의 주체. 즉각 보고 필수.
+- 70~89: SK그룹/최태원/계열사가 주체이거나, SK하이닉스에 직접 영향(고객사·경쟁사·정책·규제).
+- 50~69: 반도체 산업·메모리·HBM·AI칩 등 SK하이닉스 사업에 간접 영향.
+- 30~49: 일반 산업·경제 동향 중 참고할 만한 것.
+- 0~29: 시황 헤드라인, 무관한 기사, 단순 종목 나열.
+
+[출력]
+JSON 배열만 출력. 사유·설명·코드블록 금지.
+[{"id": 123, "s": 85}, {"id": 124, "s": 12}, ...]
+모든 입력 id에 대해 점수 부여 (누락 금지).
+"""
+
+
+def _stage1_filter(articles: list[dict], categories: dict[int, str]) -> dict[int, int]:
+    """Stage 1: 전체 기사에 0~100 점수 부여. 출력은 {id: score} dict."""
+    if not articles:
+        return {}
+    try:
+        from google import genai
+        from google.genai import types as gtypes
+    except ImportError:
+        logger.error("[Stage1] google-genai 미설치")
+        return {a["id"]: 50 for a in articles}
+
+    import os, json as _json
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        logger.warning("[Stage1] GEMINI_API_KEY 없음 - 전체 50점 fallback")
+        return {a["id"]: 50 for a in articles}
+
+    # 입력 라인 구성 (간결하게)
+    lines = []
+    for a in articles:
+        aid = a.get("id")
+        cat = categories.get(aid, "industry")
+        title = (a.get("title_clean") or a.get("title") or "")[:80]
+        summary = (a.get("summary") or a.get("description") or "")[:100]
+        tone = a.get("tone_classification") or "-"
+        press = (a.get("press") or "-")[:20]
+        track = a.get("track") or "-"
+        lines.append(f"{aid}|{cat}|{track}|{tone}|{press}|{title} :: {summary}")
+    body = "\n".join(lines)
+
+    full_prompt = STAGE1_PROMPT + "\n[기사 목록]\n" + body
+
+    try:
+        client = genai.Client(api_key=api_key)
+        resp = client.models.generate_content(
+            model="gemini-flash-lite-latest",
+            contents=full_prompt,
+            config=gtypes.GenerateContentConfig(
+                temperature=0,
+                max_output_tokens=min(32000, len(articles) * 20 + 500),
+                response_mime_type="application/json",
+            ),
+        )
+        text = (resp.text or "").strip()
+        # JSON 파싱
+        if text.startswith("```"):
+            text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
+            text = re.sub(r"\n?```$", "", text)
+        data = _json.loads(text)
+        scores = {}
+        for item in data:
+            try:
+                aid = int(item.get("id"))
+                s = int(item.get("s", 0))
+                scores[aid] = max(0, min(100, s))
+            except (TypeError, ValueError):
+                continue
+        logger.info(f"[Stage1] {len(articles)}건 입력 → {len(scores)}건 점수")
+        # 누락된 기사는 0점
+        for a in articles:
+            scores.setdefault(a["id"], 0)
+        return scores
+    except Exception as e:
+        logger.error(f"[Stage1] 실패: {e}")
+        return {a["id"]: 50 for a in articles}
+
+
+def _select_top_by_track(articles: list[dict], scores: dict[int, int],
+                          per_track: int = 100) -> list[dict]:
+    """Stage1 점수 기준으로 track별 상위 N건 추출 (점수 DESC, 최신 DESC)."""
+    monitor = [a for a in articles if (a.get("track") or "") == "monitor"]
+    reference = [a for a in articles if (a.get("track") or "") != "monitor"]
+
+    def _sort_key(a):
+        return (-scores.get(a["id"], 0), -(a.get("collected_at") or "").__hash__())
+
+    # 안전한 정렬: 점수 DESC, collected_at DESC
+    def _key(a):
+        s = scores.get(a["id"], 0)
+        ts = a.get("collected_at") or a.get("pub_date") or ""
+        return (-s, ts)  # 점수 내림차순, ts는 문자열 → 오름차순이지만 동점일 때만 의미
+    monitor.sort(key=lambda a: (-scores.get(a["id"], 0), a.get("collected_at") or ""), reverse=False)
+    monitor.sort(key=lambda a: scores.get(a["id"], 0), reverse=True)
+    reference.sort(key=lambda a: scores.get(a["id"], 0), reverse=True)
+
+    top_mon = monitor[:per_track]
+    top_ref = reference[:per_track]
+    logger.info(f"[Stage1] track별 추출: monitor={len(top_mon)} reference={len(top_ref)}")
+    return top_mon + top_ref
+# ===== END STEP-IMPACT-3 =====
+
+
 def evaluate(articles: list[dict], categories: dict[int, str],
              settings: dict) -> dict:
     """LLM 호출로 임팩트 평가. 실패 시 fallback.
@@ -392,6 +502,13 @@ def evaluate(articles: list[dict], categories: dict[int, str],
     Returns:
         {top5_commentary, company_group_top10, industry_top10}
     """
+    # STEP-IMPACT-3: Stage 1 필터 (전체 → track별 TOP 100)
+    if len(articles) > 200:
+        logger.info(f"[Stage1] 전체 {len(articles)}건 → 필터링 시작")
+        _scores = _stage1_filter(articles, categories)
+        articles = _select_top_by_track(articles, _scores, per_track=100)
+        logger.info(f"[Stage1] 필터 결과 {len(articles)}건 → Stage2 진행")
+    # ===== Stage 2 (기존 로직) =====
     if not articles:
         return {"top5_commentary": [], "company_group_top10": [], "industry_top10": []}
 
