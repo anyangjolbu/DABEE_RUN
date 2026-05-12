@@ -322,7 +322,14 @@ def run_slot_report(slot: str, date_str: Optional[str] = None,
         return {"skipped": True, "slot": slot}
 
     if base_dt is None:
-        base_dt = datetime.now(config.KST)
+        if date_str:
+            # date_str이 주어지면 그 날짜 정오(KST)를 기준으로 윈도우 계산.
+            # Why: admin 재생성에서 base_dt=None, date_str=과거날짜로 호출 시
+            # now()로 채우면 윈도우가 오늘 기준이 되어 빈 결과가 나옴.
+            y, m, d = (int(x) for x in date_str.split("-"))
+            base_dt = datetime(y, m, d, 12, 0, tzinfo=config.KST)
+        else:
+            base_dt = datetime.now(config.KST)
     if date_str is None:
         date_str = base_dt.strftime("%Y-%m-%d")
 
