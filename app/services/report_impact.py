@@ -399,7 +399,7 @@ JSON 배열만 출력. 사유·설명·코드블록 금지.
 
 
 def _stage1_filter(articles: list[dict], categories: dict[int, str]) -> dict[int, int]:
-    """Stage 1: 전체 기사에 0~100 점수 부여. 출력은 {id: score} dict."""
+    """Stage 1: 전체 기사에 0~100 점수 부여. 배치 분할로 JSON truncate 방지."""
     if not articles:
         return {}
     try:
@@ -415,54 +415,71 @@ def _stage1_filter(articles: list[dict], categories: dict[int, str]) -> dict[int
         logger.warning("[Stage1] GEMINI_API_KEY 없음 - 전체 50점 fallback")
         return {a["id"]: 50 for a in articles}
 
-    # 입력 라인 구성 (간결하게)
-    lines = []
-    for a in articles:
-        aid = a.get("id")
-        cat = categories.get(aid, "industry")
-        title = (a.get("title_clean") or a.get("title") or "")[:80]
-        summary = (a.get("summary") or a.get("description") or "")[:100]
-        tone = a.get("tone_classification") or "-"
-        press = (a.get("press") or "-")[:20]
-        track = a.get("track") or "-"
-        lines.append(f"{aid}|{cat}|{track}|{tone}|{press}|{title} :: {summary}")
-    body = "\n".join(lines)
+    # Flash Lite 최대 출력 토큰 8192 → 1건당 ~12 토큰 → 안전하게 500건/배치
+    BATCH_SIZE = 500
+    client = genai.Client(api_key=api_key)
+    all_scores: dict[int, int] = {}
 
-    full_prompt = STAGE1_PROMPT + "\n[기사 목록]\n" + body
+    batches = [articles[i:i+BATCH_SIZE] for i in range(0, len(articles), BATCH_SIZE)]
+    logger.info(f"[Stage1] {len(articles)}건 → {len(batches)}배치 ({BATCH_SIZE}건씩)")
 
-    try:
-        client = genai.Client(api_key=api_key)
-        resp = client.models.generate_content(
-            model="gemini-flash-lite-latest",
-            contents=full_prompt,
-            config=gtypes.GenerateContentConfig(
-                temperature=0,
-                max_output_tokens=min(32000, len(articles) * 20 + 500),
-                response_mime_type="application/json",
-            ),
-        )
-        text = (resp.text or "").strip()
-        # JSON 파싱
-        if text.startswith("```"):
-            text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
-            text = re.sub(r"\n?```$", "", text)
-        data = _json.loads(text)
-        scores = {}
-        for item in data:
+    for bi, batch in enumerate(batches, 1):
+        lines = []
+        for a in batch:
+            aid = a.get("id")
+            cat = categories.get(aid, "industry")
+            title = (a.get("title_clean") or a.get("title") or "")[:80]
+            summary = (a.get("summary") or a.get("description") or "")[:100]
+            tone = a.get("tone_classification") or "-"
+            press = (a.get("press") or "-")[:20]
+            track = a.get("track") or "-"
+            lines.append(f"{aid}|{cat}|{track}|{tone}|{press}|{title} :: {summary}")
+        body = "\n".join(lines)
+        full_prompt = STAGE1_PROMPT + "\n[기사 목록]\n" + body
+
+        try:
+            resp = client.models.generate_content(
+                model="gemini-flash-lite-latest",
+                contents=full_prompt,
+                config=gtypes.GenerateContentConfig(
+                    temperature=0,
+                    max_output_tokens=8192,
+                    response_mime_type="application/json",
+                ),
+            )
+            text = (resp.text or "").strip()
+            if text.startswith("```"):
+                text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
+                text = re.sub(r"\n?```$", "", text)
+
+            # 강건한 파싱: 완전한 JSON 실패 시 정규식으로 항목 추출
+            parsed = []
             try:
-                aid = int(item.get("id"))
-                s = int(item.get("s", 0))
-                scores[aid] = max(0, min(100, s))
-            except (TypeError, ValueError):
-                continue
-        logger.info(f"[Stage1] {len(articles)}건 입력 → {len(scores)}건 점수")
-        # 누락된 기사는 0점
-        for a in articles:
-            scores.setdefault(a["id"], 0)
-        return scores
-    except Exception as e:
-        logger.error(f"[Stage1] 실패: {e}")
-        return {a["id"]: 50 for a in articles}
+                parsed = _json.loads(text)
+            except _json.JSONDecodeError:
+                # truncate된 경우 마지막 완전한 객체까지만 파싱
+                matches = re.findall(r'\{\s*"id"\s*:\s*(\d+)\s*,\s*"s"\s*:\s*(\d+)\s*\}', text)
+                parsed = [{"id": int(m[0]), "s": int(m[1])} for m in matches]
+                logger.warning(f"[Stage1] 배치 {bi} JSON 손상 → 정규식 복구 {len(parsed)}건")
+
+            cnt = 0
+            for item in parsed:
+                try:
+                    aid = int(item.get("id"))
+                    s = int(item.get("s", 0))
+                    all_scores[aid] = max(0, min(100, s))
+                    cnt += 1
+                except (TypeError, ValueError):
+                    continue
+            logger.info(f"[Stage1] 배치 {bi}/{len(batches)}: 입력 {len(batch)}건 → 파싱 {cnt}건")
+        except Exception as e:
+            logger.error(f"[Stage1] 배치 {bi} 실패: {e}")
+
+    # 누락된 기사는 0점 (Stage2에서 자동 탈락)
+    for a in articles:
+        all_scores.setdefault(a["id"], 0)
+    logger.info(f"[Stage1] 최종 점수 부여: {len(all_scores)}건")
+    return all_scores
 
 
 def _select_top_by_track(articles: list[dict], scores: dict[int, int],
