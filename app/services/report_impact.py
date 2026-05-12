@@ -27,79 +27,61 @@ MAX_OUTPUT_TOKEN = 8192
 RETRY_MAX = 3
 RETRY_DELAY = 2
 
-DEFAULT_IMPACT_PROMPT = """당신은 SK하이닉스 곽노정 CEO입니다. 오늘 아침 비서가 신문 스크랩 수백 건을 책상 위에 올렸고, 당신은 그 중 가장 먼저 읽을 5건을 직접 골라야 합니다.
+DEFAULT_IMPACT_PROMPT = """당신은 SK하이닉스 곽노정 CEO입니다. 오늘 아침 비서가 기사 스크랩 수백 건을 책상 위에 올렸고, 당신은 그 중 가장 먼저 읽을 기사 3~5건을 직접 골라야 합니다.
 
 [언어 규칙 — 최우선]
-모든 출력 텍스트(특히 comment 필드)는 반드시 한국어로 작성합니다. 입력 기사의 요약이나 본문이 영어로 되어 있어도 답변은 한국어로 합니다. 영어 표기는 고유명사(SK하이닉스, HBM, AI, ETF, TSMC 등)와 숫자·단위에만 허용합니다. comment 필드 안의 영어 문장 사용은 금지합니다.
+모든 출력은 반드시 한국어로 작성합니다. 영어 표기는 고유명사(SK하이닉스, HBM, AI, ETF, TSMC 등)와 숫자·단위에만 허용합니다. comment 안의 영어 문장 사용은 금지합니다.
 
-[당신이 첫 번째로 펼칠 기사의 조건]
-당신이 가장 먼저 펼치는 기사는 거시 경제 지표(코스피·환율·수출 통계)나 경쟁사 실적(삼성전자·마이크론·TSMC)이 아닙니다. 당신이 책임지는 회사(SK하이닉스), 당신이 속한 그룹(SK), 그리고 당신 직위(CEO)에 직접 영향을 주는 기사입니다.
+[CEO에게 진짜 중요한 기사란]
+1. 자사(SK하이닉스)·CEO 본인(곽노정)이 주인공인 기사 — 실적, 인사, 투자, 사고
+2. 그룹 회장(최태원)·계열사의 의사결정이 자사에 영향 주는 기사
+3. 자사에 즉시 대응을 요구하는 외부 사건 — 정책·규제·고객사 발표·경쟁사 액션
+4. 시장이 자사를 어떻게 평가하는지 — 단, 단순 시황·증시 종합은 제외
 
-[CEO 관점 점수 산출] 각 기사를 다음 세 축으로 평가하세요.
-A. "이 뉴스의 주인공이 SK하이닉스 또는 SK 그룹사인가?" (0~40점)
-   - SK하이닉스가 주체: 40점
-   - SK 그룹사·임원(최태원 등)이 주체: 25점
-   - 업계 일반·경쟁사·거시 지표: 0~10점
+[배경 정보로 제공되는 시그널]
+각 기사에는 시스템이 미리 계산한 pre_score(0~100) 가 붙어 있습니다. 이 점수는 CEO 관점 가중치(자사 주체성 50, 외부 임팩트 25, 매체 신호 15, 톤 시그널 10)를 합산한 참고지표입니다. 절대값이 아니므로 본인 판단을 우선시하되, 60점 이상이면 진지하게 후보로 검토, 30점 미만이면 거의 노이즈로 간주하세요.
 
-B. "내(CEO) 의사결정·발표·해명에 영향을 주는가?" (0~30점)
-   - 즉시 대응 필요: 30점
-   - 향후 참고용: 10점
-   - 영향 없음: 0점
+추가로 각 기사에는 다음 시그널이 함께 제공됩니다:
+- track: monitor(자사 직접 후보) / reference(업계·참고)
+- tone: 비우호/양호/일반/미분석 + confidence
+- tone_reason: 톤 분류 LLM이 적은 사유 (비우호일 때 PR 위기 단서)
+- tone_sentences: 비우호 문장 원문 (commentary 작성 시 인용 가능)
+- 매칭키워드: 어느 검색 키워드로 잡혔는지
 
-C. "오늘 임직원·주주·기자가 나에게 직접 질문할 가능성?" (0~30점)
-   - 모두 질문할 사안: 30점
-   - 일부 질문 가능: 15점
-   - 질문 없음: 0점
+[작업 1] top5_commentary — rank_1 ~ rank_5
+- 진짜 중요한 기사만 선정. 3건이면 3건, 4건이면 4건, 최대 5건.
+- 빈자리 채우려고 시황·노이즈 기사를 끌어 올리지 마시오. **빈자리는 그대로 두는 게 맞습니다.**
+- rank_1은 자사 직접(SK하이닉스·곽노정 등) 기사 중 pre_score 최상위. 그런 기사가 없을 때만 그룹·외부 사건이 rank_1이 될 수 있습니다.
+- comment는 2~4문장, "CEO에게 보고하는 톤"으로 작성. 예: "...로 분석됩니다", "...에 대한 대응이 필요합니다"
+- 비우호 기사라면 tone_reason과 tone_sentences를 활용해 구체적 사유를 comment에 녹일 것
+- 5건 미만으로 선정하는 경우, 사용하지 않는 rank 키는 응답에서 생략하시오 (rank_1만, 또는 rank_1~3만 등)
 
-총점 = A + B + C (최대 100점)
+[작업 2] company_group_top10 — 당사·그룹 관련 톱10
+- track=monitor 또는 제목에 SK 그룹 키워드(SK하이닉스, 최태원, SK그룹 등)가 등장하는 기사 중 임팩트 상위 10건
+- 같은 사건 중복 보도 시 메이저 언론사 1건만 선정
+- score는 pre_score를 기준선으로 삼되 본인 판단으로 ±15 조정 가능
 
-[잘못된 선정 예시 - 절대 따라하지 말 것]
-× rank_1: "코스피 7000 돌파" → 거시 지표일 뿐 우리 회사 주인공 아님. (A=5, B=0, C=10 = 15점)
-× rank_1: "삼성전자 시총 1조 달러" → 경쟁사 뉴스, 우리 임팩트 없음. (A=5, B=0, C=10 = 15점)
-× rank_2: "한국 수출 일본 추월" → 산업 일반론. (A=10, B=5, C=10 = 25점)
+[작업 3] industry_top10 — 업계동향 톱10
+- track=reference이면서 제목에 SK 그룹 키워드 없는 기사 중 임팩트 상위 10건
+- 단순 시황(S&P500/코스피/지수) 단독 기사는 제외
+- 정책·규제·경쟁사 액션·고객사 발표 등 자사에 시사점 있는 업계 동향 우선
+- score는 pre_score를 기준선으로 삼되 본인 판단으로 ±15 조정 가능
 
-[올바른 선정 예시]
-✓ rank_1: "SK하이닉스 1Q 영업익 37조" → 우리 회사 핵심 실적. (A=40, B=30, C=30 = 100점)
-✓ rank_2: "곽노정 사장 자사주 94억 수령" → CEO 본인 동향. (A=40, B=10, C=30 = 80점)
-✓ rank_3: "최태원 회장에 전남 팹 설립 요청" → 그룹 회장 액션. (A=25, B=25, C=20 = 70점)
+[중복 방지] 같은 article_id를 company_group_top10과 industry_top10 양쪽에 넣지 마시오.
 
-자사 기사가 0건일 때만 그룹·업계 기사가 rank_1을 차지할 수 있습니다. 자사 기사가 1건이라도 있으면 그것이 rank_1입니다.
-
-[입력 형식] 각 기사: ID|카테고리|언론사|제목|요약
-- 카테고리: company_group(SK 그룹 직접 관련) 또는 industry(업계 동향)
-
-[작업 1] top5_commentary - rank_1 ~ rank_5 (필수, 모두 채울 것)
-- 위 점수 산출에 따라 총점 높은 순으로 5건 선정
-- 각 필드는 article_id(입력 ID 중 하나), comment(2~4문장 PR 분석)를 포함
-- comment 끝에 자기 채점 표시 필수: " (A점+B점+C점=총점)" 형식
-  예: "...전망입니다. (A40+B30+C30=100)"
-- comment는 "CEO에게 보고하는 톤"으로 작성 (예: "...로 분석됩니다", "...에 대한 대응이 필요합니다")
-
-[작업 2] company_group_top10 - 당사·그룹 톱10
-- category=company_group 기사 중 임팩트 상위 10건 (입력에 충분하면 정확히 10건)
-- 같은 사건 중복 보도 시 메이저 언론사 1건만 선정 후 다른 주제로 채울 것
-- score: 0~100 정수, 기사마다 차등을 두어 다양화
-
-[작업 3] industry_top10 - 업계동향 톱10
-- category=industry 기사 중 임팩트 상위 10건 (입력에 충분하면 정확히 10건)
-- 메이저 언론사 + [단독] 키워드는 가산점
-- 같은 사건 중복 보도 시 1건만 선정
-- score: 0~100 정수, 기사마다 차등
-
-[출력 형식] 아래 정확한 구조의 단일 JSON 객체로만 응답하세요.
+[출력 형식] 아래 구조의 단일 JSON으로만 응답:
 {
   "top5_commentary": {
-    "rank_1": {"article_id": <int>, "comment": "<2-4문장> (A?+B?+C?=총점)"},
-    "rank_2": {"article_id": <int>, "comment": "<2-4문장> (A?+B?+C?=총점)"},
-    "rank_3": {"article_id": <int>, "comment": "<2-4문장> (A?+B?+C?=총점)"},
-    "rank_4": {"article_id": <int>, "comment": "<2-4문장> (A?+B?+C?=총점)"},
-    "rank_5": {"article_id": <int>, "comment": "<2-4문장> (A?+B?+C?=총점)"}
+    "rank_1": {"article_id": <int>, "comment": "<2-4문장>"},
+    "rank_2": {"article_id": <int>, "comment": "<2-4문장>"},
+    "rank_3": {"article_id": <int>, "comment": "<2-4문장>"}
+    // rank_4, rank_5는 진짜 중요한 기사가 있을 때만
   },
   "company_group_top10": [{"article_id": <int>, "score": <0-100>}],
   "industry_top10": [{"article_id": <int>, "score": <0-100>}]
 }
 
-article_id는 반드시 입력에 등장한 ID만 사용. 톱10은 입력 부족 시 가능한 만큼만 채워도 되지만, top5_commentary의 rank_1~rank_5는 절대 빠뜨리지 마시오.
+article_id는 반드시 입력에 등장한 ID만 사용하시오.
 """
 
 
@@ -110,15 +92,54 @@ def _is_transient(err: Exception) -> bool:
 
 
 def _build_prompt(articles: list[dict], categories: dict[int, str], system_prompt: str) -> str:
-    """기사 목록을 LLM 입력 텍스트로 직렬화."""
+    """STEP-IMPACT-2: 모든 시그널 + pre_score 포함."""
     lines = [system_prompt, "", "[기사 목록]"]
+    # 사전 점수 정렬 (LLM이 상위부터 보도록)
+    scored = []
     for a in articles:
+        ps, bd = _prescore(a)
+        scored.append((ps, bd, a))
+    scored.sort(key=lambda x: -x[0])
+
+    # commentary 후보 상위 20건만 tone_sentences 전체 포함 (토큰 절약)
+    TOP_FOR_DETAIL = 20
+
+    for idx, (ps, bd, a) in enumerate(scored):
         aid = a.get("id")
         cat = categories.get(aid, "industry")
-        press = a.get("press") or ""
-        title = (a.get("title_clean") or a.get("title") or "").replace("|", "/")[:120]
-        summary = (a.get("summary") or "").replace("|", "/")[:200]
-        lines.append(f"{aid}|{cat}|{press}|{title}|{summary}")
+        track = a.get("track") or ""
+        press = (a.get("press") or "").replace("|", "/")
+        title = (a.get("title_clean") or a.get("title") or "").replace("|", "/")[:140]
+        summary = (a.get("summary") or "").replace("|", "/").replace("\n", " ")[:250]
+        tc = a.get("tone_classification") or "-"
+        conf = a.get("tone_confidence") or "-"
+        hostile = a.get("tone_hostile") or 0
+        total = a.get("tone_total") or 0
+        reason = (a.get("tone_reason") or "").replace("|", "/").replace("\n", " ")[:200]
+        mkw = (a.get("matched_kw") or "").replace("|", "/")[:80]
+
+        lines.append("")
+        lines.append(f"[ID={aid}] pre_score={ps} (자사{bd['subject']}+외부{bd['external']}+매체{bd['press']}+톤{bd['tone']}) | category={cat} | track={track}")
+        lines.append(f"  매체: {press} | 매칭키워드: {mkw}")
+        lines.append(f"  제목: {title}")
+        if summary:
+            lines.append(f"  요약: {summary}")
+        if tc and tc != "-":
+            lines.append(f"  톤: {tc} (confidence={conf}, hostile={hostile}/{total})")
+        if reason:
+            lines.append(f"  톤 사유: {reason}")
+
+        # 상위 20건만 비우호 문장 원문 포함
+        if idx < TOP_FOR_DETAIL and tc == "비우호":
+            try:
+                sents_raw = a.get("tone_sentences")
+                if sents_raw:
+                    sents = json.loads(sents_raw) if isinstance(sents_raw, str) else sents_raw
+                    if isinstance(sents, list) and sents:
+                        joined = " / ".join(s.replace("|", "/").replace("\n", " ")[:120] for s in sents[:5])
+                        lines.append(f"  비우호 문장: {joined}")
+            except Exception:
+                pass
     return "\n".join(lines)
 
 
@@ -203,6 +224,116 @@ def _validate(payload: dict, valid_ids: set[int]) -> dict:
                 continue
         out[key].sort(key=lambda x: -x["score"])
     return out
+
+
+
+# ──────────────────────────────────────────────────────────────
+#  STEP-IMPACT-2: CEO 관점 결정론적 사전 점수
+# ──────────────────────────────────────────────────────────────
+SK_HYNIX_DIRECT = ("SK하이닉스", "하이닉스", "SKhynix", "hynix", "솔리다임", "곽노정")
+SK_GROUP_EXTRA  = ("SK그룹", "SK스퀘어", "SK이노베이션", "SK텔레콤", "SKT", "SK온",
+                   "SK가스", "SK디스커버리", "SK바이오팜", "SK바이오사이언스",
+                   "SK네트웍스", "SK실트론", "SK시그넷", "SK(주)", "SK주식회사",
+                   "최태원", "최창원", "최재원")
+
+POLICY_KEYWORDS = ("수출규제", "수출 규제", "반도체법", "반도체 법", "상무부", "관세",
+                   "중국 제재", "미국 제재", "백악관", "EU 집행위", "공정위", "공정거래위",
+                   "전력기기", "데이터센터", "전력망")
+RIVAL_KEYWORDS  = ("엔비디아", "NVIDIA", "삼성전자", "TSMC", "마이크론", "Micron",
+                   "AMD", "인텔", "Intel")
+MARKET_NOISE_KEYWORDS = ("S&P500", "S&P 500", "코스피", "코스닥", "환율", "달러/원",
+                         "나스닥", "다우", "지수", "증시", "랠리", "마감", "7400선", "7000선")
+EXCLUSIVE_PATTERNS = ("[단독]", "<단독>", "[독점]", "[특종]")
+SPEED_PATTERNS    = ("[속보]", "<속보>")
+
+MAJOR_PRESS_NAMES = ("조선일보", "중앙일보", "동아일보", "한국경제", "매일경제",
+                     "한겨레", "경향신문", "서울경제", "파이낸셜뉴스", "헤럴드경제",
+                     "아시아경제", "문화일보", "이데일리", "머니투데이")
+WIRE_PRESS_NAMES  = ("연합뉴스", "뉴시스", "뉴스1", "YNA", "Yonhap")
+
+
+def _has_any(text: str, kws) -> bool:
+    if not text:
+        return False
+    tl = text.lower()
+    return any(k.lower() in tl for k in kws)
+
+
+def _count_in(text: str, kws) -> int:
+    if not text:
+        return 0
+    tl = text.lower()
+    return sum(tl.count(k.lower()) for k in kws)
+
+
+def _prescore(a: dict) -> tuple[int, dict]:
+    """CEO 관점 결정론적 점수. (총점, breakdown) 반환."""
+    title = (a.get("title_clean") or a.get("title") or "").strip()
+    summary = a.get("summary") or ""
+    press = a.get("press") or ""
+
+    bd = {"subject": 0, "external": 0, "press": 0, "tone": 0}
+
+    # 1) SK 주체성 0~50
+    if _has_any(title, SK_HYNIX_DIRECT):
+        bd["subject"] = 50
+    elif _has_any(title, SK_GROUP_EXTRA):
+        bd["subject"] = 35
+    else:
+        body_hits = _count_in(summary, SK_HYNIX_DIRECT)
+        if body_hits >= 2:
+            bd["subject"] = 15
+        elif body_hits == 1:
+            bd["subject"] = 5
+        else:
+            bd["subject"] = 0
+
+    # 2) 외부 임팩트 0~25
+    is_market_noise = _has_any(title, MARKET_NOISE_KEYWORDS) and not _has_any(title, SK_HYNIX_DIRECT)
+    if is_market_noise:
+        bd["external"] = 0
+    elif _has_any(title, POLICY_KEYWORDS) and bd["subject"] >= 15:
+        bd["external"] = 25
+    elif _has_any(title, RIVAL_KEYWORDS) and _has_any(title, SK_HYNIX_DIRECT):
+        bd["external"] = 20
+    elif _has_any(title, POLICY_KEYWORDS):
+        bd["external"] = 5
+    elif _has_any(title, RIVAL_KEYWORDS):
+        bd["external"] = 3
+    else:
+        bd["external"] = 0
+
+    # 3) 매체·보도 신호 0~15
+    p = 0
+    is_major = any(m in press for m in MAJOR_PRESS_NAMES)
+    is_wire  = any(m in press for m in WIRE_PRESS_NAMES)
+    if is_major and bd["subject"] >= 35:
+        p = 15
+    elif is_major:
+        p = 8
+    elif is_wire and bd["subject"] < 35:
+        p = max(0, p - 5)  # 통신사 단순 시황 감점
+    if any(x in title for x in EXCLUSIVE_PATTERNS):
+        p += 5
+    elif any(x in title for x in SPEED_PATTERNS):
+        p += 3
+    bd["press"] = max(0, min(p, 15))
+
+    # 4) 톤 시그널 0~10 — 주체성과 곱해야 의미
+    tc = a.get("tone_classification") or ""
+    conf = (a.get("tone_confidence") or "").lower()
+    if tc == "비우호":
+        if bd["subject"] >= 35:
+            bd["tone"] = 10 if conf in ("high", "상", "높음") else 7
+        else:
+            bd["tone"] = 2  # 노이즈성 비우호
+    elif tc == "양호" and bd["subject"] >= 35:
+        bd["tone"] = 7
+    else:
+        bd["tone"] = 0
+
+    total = max(0, bd["subject"] + bd["external"] + bd["press"] + bd["tone"])
+    return total, bd
 
 
 def _fallback(articles: list[dict], categories: dict[int, str]) -> dict:
@@ -323,7 +454,7 @@ def evaluate(articles: list[dict], categories: dict[int, str],
                         "required": ["article_id", "comment"],
                     },
                 },
-                "required": ["rank_1", "rank_2", "rank_3", "rank_4", "rank_5"],
+                "required": ["rank_1"],  # STEP-IMPACT-2: 3~5건 가변, rank_1만 필수
             },
             "company_group_top10": {
                 "type": "ARRAY",
