@@ -626,10 +626,84 @@ STAGE1_PROMPT = """당신은 SK하이닉스 홍보/대외협력 조직의 뉴스
 - 단순 코스피/환율/나스닥/시총 기사만으로는 낮게 평가하십시오.
 
 [출력]
-JSON 배열만 출력. 사유·설명·코드블록 금지.
-[{"id": 123, "s": 85}, {"id": 124, "s": 12}, ...]
-모든 입력 id에 대해 점수 부여. 누락 금지.
+반드시 단일 JSON 객체만 출력합니다. 설명·사유·마크다운·코드블록은 금지합니다.
+키는 기사 id를 문자열로, 값은 0~100 정수 점수로 씁니다.
+예: {"123":85,"124":12,"125":67}
+입력된 모든 id를 빠짐없이 포함합니다.
 """
+
+
+def _parse_stage1_scores(text: str) -> dict[int, int]:
+    """Stage1 응답 파서.
+
+    JSON 객체 {"123":85}를 기본으로 받는다. 과거/비정상 응답인
+    JSON 배열 [{"id":123,"s":85}]과 일부 손상 텍스트도 최소 복구한다.
+    """
+    if not text:
+        return {}
+    t = text.strip()
+    if t.startswith("```"):
+        t = re.sub(r"^```[a-zA-Z]*\n?", "", t)
+        t = re.sub(r"\n?```$", "", t).strip()
+
+    # 1) 정상 JSON 우선
+    try:
+        parsed = json.loads(t)
+        out: dict[int, int] = {}
+        if isinstance(parsed, dict):
+            for k, v in parsed.items():
+                try:
+                    out[int(k)] = max(0, min(100, int(v)))
+                except Exception:
+                    continue
+            return out
+        if isinstance(parsed, list):  # 구버전 호환
+            for item in parsed:
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    aid = int(item.get("id"))
+                    s = int(item.get("s", item.get("score", 0)))
+                    out[aid] = max(0, min(100, s))
+                except Exception:
+                    continue
+            return out
+    except json.JSONDecodeError:
+        pass
+
+    # 2) JSON 객체가 앞뒤 설명 때문에 깨진 경우, 가장 큰 객체 범위만 추출
+    start = t.find("{")
+    end = t.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            parsed = json.loads(t[start:end + 1])
+            if isinstance(parsed, dict):
+                out = {}
+                for k, v in parsed.items():
+                    try:
+                        out[int(k)] = max(0, min(100, int(v)))
+                    except Exception:
+                        continue
+                return out
+        except json.JSONDecodeError:
+            pass
+
+    # 3) 최후 복구: "123":85 또는 {"id":123,"s":85} 패턴
+    out: dict[int, int] = {}
+    for k, v in re.findall(r'"?(\d+)"?\s*:\s*(\d{1,3})', t):
+        try:
+            out[int(k)] = max(0, min(100, int(v)))
+        except Exception:
+            continue
+    if out:
+        return out
+
+    for k, v in re.findall(r'\{\s*"id"\s*:\s*(\d+)\s*,\s*"s"\s*:\s*(\d{1,3})\s*\}', t):
+        try:
+            out[int(k)] = max(0, min(100, int(v)))
+        except Exception:
+            continue
+    return out
 
 
 def _stage1_filter(articles: list[dict], categories: dict[int, str]) -> dict[int, int]:
@@ -648,26 +722,31 @@ def _stage1_filter(articles: list[dict], categories: dict[int, str]) -> dict[int
         logger.warning("[Stage1] GEMINI_API_KEY 없음 - 규칙 점수 fallback")
         return {a["id"]: _prescore(a)[0] for a in articles if "id" in a}
 
-    BATCH_SIZE = 450
+    # JSON 배열 [{id,s}]는 8192 토큰 근처에서 잘려 정규식 복구가 반복될 수 있다.
+    # 객체 맵 {"id":score}로 출력 토큰을 줄이고, 배치 크기도 낮춰 truncate 가능성을 줄인다.
+    BATCH_SIZE = 300
     client = genai.Client(api_key=api_key)
     all_scores: dict[int, int] = {}
     batches = [articles[i:i + BATCH_SIZE] for i in range(0, len(articles), BATCH_SIZE)]
-    logger.info(f"[Stage1] {len(articles)}건 → {len(batches)}배치 ({BATCH_SIZE}건씩)")
+    logger.info(f"[Stage1] {len(articles)}건 → {len(batches)}배치 ({BATCH_SIZE}건씩, compact-json-map)")
 
     for bi, batch in enumerate(batches, 1):
+        batch_by_id: dict[int, dict] = {}
         lines = []
         for a in batch:
-            aid = a.get("id")
+            try:
+                aid = int(a.get("id"))
+            except Exception:
+                continue
+            batch_by_id[aid] = a
             cat = categories.get(aid, "industry")
             title = (a.get("title_clean") or a.get("title") or "")[:90]
             summary = (a.get("summary") or a.get("description") or "")[:120]
             tone = a.get("tone_classification") or "-"
-            press = (a.get("press") or "-")[:24]
+            press = (a.get("press") or "-")[:20]
             track = a.get("track") or "-"
-            rule, bd = _prescore(a)
-            ik = _issue_key(a)
-            cls = _report_class(a)
-            lines.append(f"{aid}|{cat}|{track}|{tone}|{press}|rule={rule}|class={cls}|issue={ik}|{title} :: {summary}")
+            # Stage1은 LLM 점수만 받는다. prescore/규칙 점수는 섞지 않아 후보 압축 노이즈를 줄인다.
+            lines.append(f"{aid}|{cat}|{track}|{tone}|{press}|{title} :: {summary}")
         full_prompt = STAGE1_PROMPT + "\n[기사 목록]\n" + "\n".join(lines)
 
         try:
@@ -681,41 +760,28 @@ def _stage1_filter(articles: list[dict], categories: dict[int, str]) -> dict[int
                 ),
             )
             text = (resp.text or "").strip()
-            if text.startswith("```"):
-                text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
-                text = re.sub(r"\n?```$", "", text)
-            try:
-                parsed = json.loads(text)
-            except json.JSONDecodeError:
-                matches = re.findall(r'\{\s*"id"\s*:\s*(\d+)\s*,\s*"s"\s*:\s*(\d+)\s*\}', text)
-                parsed = [{"id": int(m[0]), "s": int(m[1])} for m in matches]
-                logger.warning(f"[Stage1] 배치 {bi} JSON 손상 → 정규식 복구 {len(parsed)}건")
+            parsed_scores = _parse_stage1_scores(text)
+            if len(parsed_scores) < max(1, int(len(batch_by_id) * 0.9)):
+                logger.warning(
+                    f"[Stage1] 배치 {bi} 응답 누락 많음: 입력 {len(batch_by_id)}건 → 파싱 {len(parsed_scores)}건"
+                )
+            else:
+                logger.info(f"[Stage1] 배치 {bi} JSON 파싱 성공: {len(parsed_scores)}/{len(batch_by_id)}건")
 
-            for item in parsed if isinstance(parsed, list) else []:
-                try:
-                    aid = int(item.get("id"))
-                    llm_s = max(0, min(100, int(item.get("s", 0))))
-                    a = next((x for x in batch if int(x.get("id")) == aid), None)
-                    rule_s = _prescore(a)[0] if a else llm_s
-                    # LLM 판단을 주로 쓰되, 규칙 점수로 단순 시황/직접성 누락을 보정
-                    mixed = round(llm_s * 0.65 + rule_s * 0.35)
-                    if a and _is_market_noise(a):
-                        mixed = min(mixed, 35)
-                    all_scores[aid] = max(0, min(100, mixed))
-                except Exception:
-                    continue
+            for aid in batch_by_id.keys():
+                llm_s = parsed_scores.get(aid)
+                # 누락분은 0점으로 둔다. 잘릴 정도의 후순위 응답은 Stage2 후보에서 자연스럽게 밀리게 한다.
+                all_scores[aid] = max(0, min(100, int(llm_s))) if llm_s is not None else 0
             logger.info(f"[Stage1] 배치 {bi}/{len(batches)} 완료")
         except Exception as e:
             logger.error(f"[Stage1] 배치 {bi} 실패: {e}")
-            for a in batch:
-                if "id" in a:
-                    all_scores[int(a["id"])] = _prescore(a)[0]
+            for aid in batch_by_id.keys():
+                all_scores[aid] = 0
 
     for a in articles:
         if "id" in a:
-            all_scores.setdefault(int(a["id"]), _prescore(a)[0])
+            all_scores.setdefault(int(a["id"]), 0)
     return all_scores
-
 
 def _select_top_by_track(articles: list[dict], scores: dict[int, int], per_track: int = 120) -> list[dict]:
     """Stage2 입력 후보를 track별/이슈별로 다양하게 보존."""
