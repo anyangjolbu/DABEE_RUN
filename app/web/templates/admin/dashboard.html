@@ -95,6 +95,21 @@
         <button class="btn btn-primary" id="btnTrigger">▶ Trigger pipeline now</button>
         <button class="btn" id="btnStart">▶ Start scheduler</button>
         <button class="btn btn-danger" id="btnStop">⏸ Stop scheduler</button>
+
+        <hr style="margin:12px 0;border:none;border-top:1px solid var(--border);">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+          <label style="font:600 12px/1 var(--font-mono);color:var(--muted);">Slot</label>
+          <select id="regenSlot" class="input-field" style="width:auto;padding:6px 8px;">
+            <option value="evening">evening</option>
+            <option value="morning">morning</option>
+          </select>
+          <label class="perm-item" style="font-size:12px;">
+            <input type="checkbox" id="regenSendTg" /> 텔레그램 발송
+          </label>
+          <button class="btn btn-primary btn-sm" id="btnRegenReport">🔄 리포트 재생성</button>
+        </div>
+        <div id="regenResult" style="font:600 12px/1.4 var(--font-mono);color:var(--muted);min-height:18px;margin-top:6px;white-space:pre-line;"></div>
+
         <div class="recent" id="recentSends" style="display:none">
           <div class="r-head">Recent Activity</div>
         </div>
@@ -321,6 +336,41 @@
   document.getElementById('btnTrigger').addEventListener('click', () => ctrl('/api/admin/scheduler/trigger', '즉시 실행'));
   document.getElementById('btnStart').addEventListener('click',   () => ctrl('/api/admin/scheduler/start',   '시작'));
   document.getElementById('btnStop').addEventListener('click',    () => ctrl('/api/admin/scheduler/stop',    '정지'));
+
+  // ── 리포트 재생성 (STEP-ADMIN-REGEN) ─────────────────────
+  document.getElementById('btnRegenReport').addEventListener('click', async () => {
+    const btn = document.getElementById('btnRegenReport');
+    const out = document.getElementById('regenResult');
+    const slot = document.getElementById('regenSlot').value;
+    const sendTg = document.getElementById('regenSendTg').checked;
+    if (!confirm(`${slot} 슬롯 리포트를 강제 재생성하시겠습니까?\n` +
+                 `텔레그램 발송: ${sendTg ? 'YES' : 'NO (skip)'}`)) return;
+    btn.disabled = true;
+    const originalText = btn.textContent;
+    btn.textContent = '⏳ 재생성 중...';
+    out.textContent = `${slot} 슬롯 재생성 요청 중... (LLM 호출로 10~30초 소요)`;
+    try {
+      const res = await adminFetch('/api/admin/report/regenerate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot, skip_telegram: !sendTg }),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const d = await res.json();
+      out.textContent =
+        `✅ 재생성 완료\n` +
+        `  · slot: ${d.slot} (${d.date})\n` +
+        `  · 기사 수: ${d.articles ?? '?'}\n` +
+        `  · 발송: ${d.sent ?? 0} / ${d.total ?? 0}`;
+      toast(`${slot} 리포트 재생성 완료`);
+    } catch (e) {
+      out.textContent = '❌ 재생성 실패: ' + e.message;
+      toast('재생성 실패', 'err');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  });
 
   // ── Recipients table ────────────────────────────────────
   function escHtml(s) {
