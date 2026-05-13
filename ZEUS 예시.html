@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>EUV PM RUN — Agent Main with Parts Summary Cards</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f5f7;
+  --surface:#fff;
+  --surface-2:#eaf2fa;
+  --jtbc-blue:#043A66;
+  --navy:#07111f;
+  --blue:#2563eb;
+  --sky:#7ec8ff;
+  --sky-soft:#cfe8ff;
+  --tone-good:#10b981;
+  --tone-warn:#ef4444;
+  --tone-watch:#f59e0b;
+  --tone-neut:#475569;
+  --text:#111827;
+  --ink-2:#374151;
+  --muted:#6b7280;
+  --line:#e5e7eb;
+
+  --font-display:"Pretendard","Inter",system-ui,sans-serif;
+  --font-body:"Pretendard","Inter",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,monospace;
+
+  --r-md:14px; --r-lg:18px; --r-xl:22px;
+  --shadow-card:0 12px 24px rgba(15,23,42,.04);
+  --shadow-trend:0 14px 30px rgba(15,23,42,.06);
+  --ease:cubic-bezier(.2,.7,.2,1);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:var(--font-body);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;font-feature-settings:"ss01","tnum"}
+a{text-decoration:none;color:inherit}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0}
+.tnum{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--font-mono)}
+.container{width:min(1400px, calc(100% - 40px));margin:0 auto}
+
+.topbar{height:78px;background:var(--surface);border-bottom:1px solid var(--line)}
+.topbar-inner{height:100%;display:flex;align-items:center;justify-content:space-between;gap:24px}
+.brand{display:flex;align-items:center;gap:18px;min-width:0;flex-wrap:wrap}
+.logo{margin:0;display:flex;align-items:flex-end;gap:8px;font-family:var(--font-display);font-size:40px;line-height:.9;letter-spacing:-0.075em;font-weight:900;white-space:nowrap}
+.logo .dabee{color:#0f172a}
+.logo .run{background:linear-gradient(135deg,#9ed2ff 0%,#4f92c9 45%,#1d5f98 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.nav{display:flex;align-items:center;gap:28px;color:var(--ink-2);font-size:16px;font-weight:700;flex-wrap:wrap}
+.nav a{position:relative}
+.nav .live{color:#dc2626;padding-left:16px}
+.nav .live::before{content:"";width:8px;height:8px;border-radius:50%;background:#dc2626;position:absolute;left:0;top:50%;transform:translateY(-50%);animation:pulseRed 1.4s var(--ease) infinite}
+@keyframes pulseRed{50%{box-shadow:0 0 0 6px rgba(220,38,38,0)}}
+.icons{display:flex;gap:14px;color:var(--ink-2);font-size:22px;align-items:center}
+.icon-btn{width:36px;height:36px;border-radius:999px;display:grid;place-items:center;border:1px solid transparent;transition:background .15s var(--ease)}
+.icon-btn:hover{background:#f1f5f9}
+
+.hero-wrap{background:var(--surface);border-bottom:1px solid var(--line)}
+.hero{display:grid;grid-template-columns:1.1fr 1fr;min-height:360px}
+.hero-left{background:var(--jtbc-blue);color:#fff;padding:42px 46px;display:flex;flex-direction:column;justify-content:space-between}
+.hero-kicker{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;font-size:12px;font-weight:800;white-space:nowrap}
+.pill.white{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.18);color:#fff}
+.pill.positive{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);color:#d9efff}
+.hero-title{margin:0;font-family:var(--font-display);font-size:52px;line-height:1.02;letter-spacing:-0.07em;font-weight:800;word-break:keep-all;color:#fff}
+.hero-title .accent{color:var(--sky-soft)}
+.hero-desc{margin:16px 0 0;color:rgba(255,255,255,.84);font-size:18px;line-height:1.7;max-width:760px;word-break:keep-all}
+.hero-meta{display:flex;gap:18px;flex-wrap:wrap;margin-top:22px;color:rgba(255,255,255,.76);font-size:14px;font-weight:600}
+.hero-bottom{margin-top:28px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.mini-stat{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:14px;backdrop-filter:blur(2px)}
+.mini-stat span{display:block;color:rgba(255,255,255,.70);font-size:12px;margin-bottom:6px}
+.mini-stat b{display:block;font-size:30px;line-height:1;letter-spacing:-0.06em;color:#fff;font-variant-numeric:tabular-nums}
+.hero-right{background:var(--surface-2);padding:28px;display:grid;gap:18px;align-content:center}
+
+.agent-panel{background:#fff;border-radius:22px;padding:22px;border:1px solid rgba(15,23,42,.06);box-shadow:var(--shadow-trend)}
+.agent-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px}
+.agent-head h3{margin:0;font-size:22px;letter-spacing:-0.04em}
+.agent-head p{margin:6px 0 0;font-size:13px;color:var(--muted)}
+.agent-chip{min-width:110px;text-align:right}
+.agent-chip span{display:block;color:var(--muted);font-size:12px;margin-bottom:2px}
+.agent-chip b{font-size:18px;line-height:1.2;letter-spacing:-0.04em;color:#0f172a}
+.chat-window{display:grid;gap:10px;min-height:172px}
+.msg{display:flex;gap:10px;align-items:flex-start}
+.avatar{width:28px;height:28px;border-radius:999px;display:grid;place-items:center;font:700 11px/1 var(--font-mono)}
+.avatar.agent{background:#dbeafe;color:#1d4ed8}
+.avatar.user{background:#e5e7eb;color:#334155}
+.bubble{flex:1;padding:12px 14px;border-radius:16px;border:1px solid rgba(15,23,42,.06);font-size:13px;line-height:1.65}
+.msg.user .bubble{background:#f8fafc;color:#0f172a}
+.msg.agent .bubble{background:#eff6ff;color:#153e75}
+.quick-asks{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.q-chip{padding:8px 10px;border-radius:999px;background:#f8fafc;border:1px solid var(--line);font-size:12px;font-weight:700;color:#334155}
+.chat-input{margin-top:14px;display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.chat-input span{flex:1;font-size:13px;color:var(--muted)}
+.ask-btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:var(--blue);color:#fff;font-size:12px;font-weight:800}
+
+.summary-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.summary-box{background:#fff;border:1px solid rgba(15,23,42,.06);border-radius:18px;padding:16px;box-shadow:var(--shadow-card)}
+.summary-box .label{font-size:12px;color:var(--muted);margin-bottom:8px;display:block}
+.summary-box .value{font-size:26px;font-weight:800;letter-spacing:-0.05em;line-height:1;margin-bottom:8px;font-variant-numeric:tabular-nums}
+.summary-box .sub{font-size:12px;color:var(--muted)}
+.summary-box.positive .value{color:var(--tone-good)}
+.summary-box.negative .value{color:var(--tone-warn)}
+.summary-box.neutral .value{color:var(--tone-neut)}
+
+.section-bar{background:#fff;border-bottom:1px solid var(--line)}
+.section-bar-inner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 0}
+.section-tabs{display:flex;gap:26px;align-items:center;font-size:16px;font-weight:700;color:#94a3b8}
+.section-tabs .active{color:#0f172a;position:relative;padding-bottom:12px}
+.section-tabs .active::after{content:"";position:absolute;left:0;right:0;bottom:-18px;height:3px;border-radius:999px;background:#1d4ed8}
+.section-date{font-size:16px;font-weight:800;color:#0f172a;display:flex;gap:10px;align-items:center}
+
+.cards-section{padding:36px 0 48px}
+.cards-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
+.equipment-card{background:#fff;border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-card);overflow:hidden;transition:transform .15s var(--ease), box-shadow .15s var(--ease)}
+.equipment-card:hover{transform:translateY(-2px);box-shadow:0 16px 34px rgba(15,23,42,.08)}
+.eq-head{padding:16px 16px 14px;border-bottom:1px solid #f1f5f9;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.eq-title{min-width:0}
+.eq-title .rank{display:inline-flex;align-items:center;margin-bottom:8px;font:800 10px/1 var(--font-mono);letter-spacing:.16em;padding:6px 8px;border-radius:6px;background:#0f172a;color:#fff}
+.eq-title .rank.watch{background:#fff7ed;color:#c2410c;border:1px solid #fed7aa}
+.eq-title .rank.normal{background:#ecfdf5;color:#047857;border:1px solid #a7f3d0}
+.eq-title h4{margin:0;font-size:22px;line-height:1;letter-spacing:-0.055em;color:#0f172a}
+.eq-title p{margin:8px 0 0;font-size:13px;color:var(--muted);line-height:1.45;word-break:keep-all}
+.risk-score{text-align:right;flex:0 0 auto}
+.risk-score span{display:block;font:700 10px/1 var(--font-mono);letter-spacing:.16em;color:var(--muted);text-transform:uppercase;margin-bottom:5px}
+.risk-score b{font-size:34px;line-height:1;letter-spacing:-0.07em;font-variant-numeric:tabular-nums}
+.risk-score.high b{color:var(--tone-warn)}
+.risk-score.mid b{color:var(--tone-watch)}
+.risk-score.low b{color:var(--tone-good)}
+.eq-body{padding:14px 16px 16px;display:grid;gap:10px}
+.part-row{display:grid;grid-template-columns:92px 1fr 42px;gap:10px;align-items:center}
+.part-name{font:800 10px/1 var(--font-mono);letter-spacing:.12em;color:#334155;text-transform:uppercase}
+.part-bar{height:7px;background:#eef2f7;border-radius:999px;overflow:hidden}
+.part-bar i{display:block;height:100%;border-radius:999px;background:var(--tone-good)}
+.part-bar i.warn{background:var(--tone-warn)}
+.part-bar i.watch{background:var(--tone-watch)}
+.part-score{text-align:right;font:800 11px/1 var(--font-mono);color:#334155}
+.ai-note{margin-top:2px;padding:12px 12px;border-radius:12px;background:#f8fafc;border:1px solid #edf2f7;font-size:13px;line-height:1.55;color:#334155;word-break:keep-all}
+.ai-note b{color:#0f172a}
+.eq-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 16px;background:#fbfdff;border-top:1px solid #f1f5f9}
+.eq-foot span{font:700 11px/1 var(--font-mono);letter-spacing:.08em;color:var(--muted)}
+.eq-foot .action{color:var(--blue)}
+
+@media(max-width:1180px){.hero{grid-template-columns:1fr}.cards-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:860px){.topbar{height:auto;padding:16px 0}.topbar-inner{flex-direction:column;align-items:flex-start}.nav{gap:16px}.hero-left{padding:28px 24px}.hero-title{font-size:38px}.hero-bottom,.summary-grid{grid-template-columns:1fr}.cards-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.section-bar-inner{flex-direction:column;align-items:flex-start}}
+@media(max-width:560px){.container{width:calc(100% - 24px)}.logo{font-size:34px}.hero-title{font-size:31px}.cards-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="container topbar-inner">
+    <div class="brand">
+      <h1 class="logo"><span class="dabee">EUV PM</span><span class="run">RUN</span></h1>
+      <nav class="nav">
+        <a class="live" href="#">LIVE</a>
+        <a href="#">장비별 현황</a>
+        <a href="#">Parts Risk</a>
+        <a href="#">PM 리포트</a>
+      </nav>
+    </div>
+    <div class="icons"><button class="icon-btn">⌕</button><button class="icon-btn">☰</button></div>
+  </div>
+</header>
+
+<section class="hero-wrap">
+  <div class="container hero">
+    <div class="hero-left">
+      <div>
+        <div class="hero-kicker"><span class="pill white">EUV PM 브리프</span><span class="pill positive">오늘의 상태: 경계</span></div>
+        <h2 class="hero-title">오늘의 EUV PM은<br><span class="accent">6PIEL102 우선</span>이 적절합니다</h2>
+        <p class="hero-desc">DGA pressure drift와 purge recovery time 악화가 동시에 관찰되었습니다. LLM은 유사 Trouble Report와 최근 7일 Trend를 근거로 6PIEL102를 최우선 PM 장비로 선정했습니다.</p>
+        <div class="hero-meta"><span>대상 장비 12대</span><span>고위험 장비 2대</span><span>전일 대비 +11p</span><span>업데이트 09:30 KST</span></div>
+      </div>
+      <div class="hero-bottom">
+        <div class="mini-stat"><span>PM Risk Index</span><b class="tnum">84</b></div>
+        <div class="mini-stat"><span>High Risk 비중</span><b>17%</b></div>
+        <div class="mini-stat"><span>PM Window</span><b>13h</b></div>
+      </div>
+    </div>
+
+    <div class="hero-right">
+      <div class="agent-panel">
+        <div class="agent-head">
+          <div>
+            <h3>PM Agent</h3>
+            <p>RAG 기반으로 장비 Condition과 PM 우선순위를 설명합니다</p>
+          </div>
+          <div class="agent-chip"><span>Agent Status</span><b>Ready · 87%</b></div>
+        </div>
+
+        <div class="chat-window">
+          <div class="msg user"><div class="avatar user">ME</div><div class="bubble">왜 6PIEL102가 PM 1순위야?</div></div>
+          <div class="msg agent"><div class="avatar agent">AI</div><div class="bubble">DGA pressure drift가 최근 7일 평균 대비 3.1σ 상승했고, purge recovery time도 함께 악화되었습니다. 유사 Trouble Report 4건에서 동일 패턴이 PM 지연 후 down risk로 연결됐습니다.</div></div>
+          <div class="msg user"><div class="avatar user">ME</div><div class="bubble">오늘 바로 PM 안 하면 어떤 리스크가 있어?</div></div>
+          <div class="msg agent"><div class="avatar agent">AI</div><div class="bubble">예상 리스크는 unscheduled down 가능성 상승, lot 영향 확대, 내일 shift PM window 축소입니다. 금일 13시간 이내 planned PM 수행을 권고합니다.</div></div>
+        </div>
+
+        <div class="quick-asks">
+          <span class="q-chip">6PIEL101과 비교</span>
+          <span class="q-chip">DGA 근거 보기</span>
+          <span class="q-chip">PM 일정 추천</span>
+        </div>
+
+        <div class="chat-input"><span>Ask the EUV PM Agent…</span><button class="ask-btn">Send</button></div>
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary-box positive"><span class="label">정상</span><div class="value">58%</div><div class="sub">Baseline 내 안정 장비</div></div>
+        <div class="summary-box negative"><span class="label">고위험</span><div class="value">17%</div><div class="sub">DGA · TIS Mark 악화</div></div>
+        <div class="summary-box neutral"><span class="label">관찰</span><div class="value">25%</div><div class="sub">Trend 상승 구간</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section-bar">
+  <div class="container section-bar-inner">
+    <div class="section-tabs"><span class="active">장비별 Parts 요약</span><span>고위험 장비</span><span>PM 우선순위</span></div>
+    <div class="section-date">2026년 5월 13일 수요일</div>
+  </div>
+</section>
+
+<main class="container cards-section">
+  <section class="cards-grid">
+    <article class="equipment-card">
+      <div class="eq-head">
+        <div class="eq-title"><span class="rank">RANK 1</span><h4>6PIEL102</h4><p>DGA 이상이 PM 우선순위를 끌어올린 장비</p></div>
+        <div class="risk-score high"><span>Risk</span><b>92</b></div>
+      </div>
+      <div class="eq-body">
+        <div class="part-row"><span class="part-name">DGA</span><span class="part-bar"><i class="warn" style="width:92%"></i></span><span class="part-score">92</span></div>
+        <div class="part-row"><span class="part-name">Wafer</span><span class="part-bar"><i class="watch" style="width:54%"></i></span><span class="part-score">54</span></div>
+        <div class="part-row"><span class="part-name">Reticle</span><span class="part-bar"><i style="width:38%"></i></span><span class="part-score">38</span></div>
+        <div class="part-row"><span class="part-name">TIS</span><span class="part-bar"><i class="watch" style="width:63%"></i></span><span class="part-score">63</span></div>
+        <div class="ai-note"><b>AI 요약</b> · DGA pressure drift와 purge recovery time이 동시에 악화. 금일 planned PM 권장.</div>
+      </div>
+      <div class="eq-foot"><span>Last PM · D-21</span><span class="action">Immediate PM</span></div>
+    </article>
+
+    <article class="equipment-card">
+      <div class="eq-head">
+        <div class="eq-title"><span class="rank watch">RANK 2</span><h4>6PIEL101</h4><p>TIS Mark 보정 필요성이 높은 관찰 장비</p></div>
+        <div class="risk-score mid"><span>Risk</span><b>75</b></div>
+      </div>
+      <div class="eq-body">
+        <div class="part-row"><span class="part-name">DGA</span><span class="part-bar"><i class="watch" style="width:58%"></i></span><span class="part-score">58</span></div>
+        <div class="part-row"><span class="part-name">Wafer</span><span class="part-bar"><i style="width:42%"></i></span><span class="part-score">42</span></div>
+        <div class="part-row"><span class="part-name">Reticle</span><span class="part-bar"><i style="width:35%"></i></span><span class="part-score">35</span></div>
+        <div class="part-row"><span class="part-name">TIS</span><span class="part-bar"><i class="watch" style="width:75%"></i></span><span class="part-score">75</span></div>
+        <div class="ai-note"><b>AI 요약</b> · TIS Mark align offset 분산 증가. PM보다는 calibration 선조치 권장.</div>
+      </div>
+      <div class="eq-foot"><span>Last PM · D-14</span><span class="action">Calibration</span></div>
+    </article>
+
+    <article class="equipment-card">
+      <div class="eq-head">
+        <div class="eq-title"><span class="rank watch">RANK 3</span><h4>6PIEL106</h4><p>Wafer Table residual 상승 추세 감지</p></div>
+        <div class="risk-score mid"><span>Risk</span><b>71</b></div>
+      </div>
+      <div class="eq-body">
+        <div class="part-row"><span class="part-name">DGA</span><span class="part-bar"><i style="width:44%"></i></span><span class="part-score">44</span></div>
+        <div class="part-row"><span class="part-name">Wafer</span><span class="part-bar"><i class="watch" style="width:71%"></i></span><span class="part-score">71</span></div>
+        <div class="part-row"><span class="part-name">Reticle</span><span class="part-bar"><i style="width:39%"></i></span><span class="part-score">39</span></div>
+        <div class="part-row"><span class="part-name">TIS</span><span class="part-bar"><i style="width:46%"></i></span><span class="part-score">46</span></div>
+        <div class="ai-note"><b>AI 요약</b> · Wafer Table residual이 상승 중이나 즉시 PM보다는 lot 영향도 모니터링 필요.</div>
+      </div>
+      <div class="eq-foot"><span>Last PM · D-18</span><span class="action">Inspect</span></div>
+    </article>
+
+    <article class="equipment-card">
+      <div class="eq-head">
+        <div class="eq-title"><span class="rank normal">NORMAL</span><h4>6PIEL103</h4><p>전체 Parts가 안정 구간에 있는 장비</p></div>
+        <div class="risk-score low"><span>Risk</span><b>38</b></div>
+      </div>
+      <div class="eq-body">
+        <div class="part-row"><span class="part-name">DGA</span><span class="part-bar"><i style="width:33%"></i></span><span class="part-score">33</span></div>
+        <div class="part-row"><span class="part-name">Wafer</span><span class="part-bar"><i style="width:41%"></i></span><span class="part-score">41</span></div>
+        <div class="part-row"><span class="part-name">Reticle</span><span class="part-bar"><i style="width:38%"></i></span><span class="part-score">38</span></div>
+        <div class="part-row"><span class="part-name">TIS</span><span class="part-bar"><i style="width:29%"></i></span><span class="part-score">29</span></div>
+        <div class="ai-note"><b>AI 요약</b> · Reticle Stage 포함 전체 Parts가 baseline 내 안정. 금일 PM 우선순위 제외.</div>
+      </div>
+      <div class="eq-foot"><span>Last PM · D-9</span><span class="action">Monitor</span></div>
+    </article>
+
+    <article class="equipment-card">
+      <div class="eq-head">
+        <div class="eq-title"><span class="rank watch">WATCH</span><h4>6PIEL108</h4><p>DGA 계열 평균 Risk 상승 영향권</p></div>
+        <div class="risk-score mid"><span>Risk</span><b>68</b></div>
+      </div>
+      <div class="eq-body">
+        <div class="part-row"><span class="part-name">DGA</span><span class="part-bar"><i class="watch" style="width:68%"></i></span><span class="part-score">68</span></div>
+        <div class="part-row"><span class="part-name">Wafer</span><span class="part-bar"><i style="width:45%"></i></span><span class="part-score">45</span></div>
+        <div class="part-row"><span class="part-name">Reticle</span><span class="part-bar"><i style="width:36%"></i></span><span class="part-score">36</span></div>
+        <div class="part-row"><span class="part-name">TIS</span><span class="part-bar"><i style="width:48%"></i></span><span class="part-score">48</span></div>
+        <div class="ai-note"><b>AI 요약</b> · DGA drift가 상승 전환. 6PIEL102 PM 후 동일 Para 재평가 필요.</div>
+      </div>
+      <div class="eq-foot"><span>Last PM · D-16</span><span class="action">Watch</span></div>
+    </article>
+
+    <article class="equipment-card">
+      <div class="eq-head">
+        <div class="eq-title"><span class="rank normal">NORMAL</span><h4>6PIEL105</h4><p>Wafer Table은 관찰, 나머지는 안정</p></div>
+        <div class="risk-score low"><span>Risk</span><b>49</b></div>
+      </div>
+      <div class="eq-body">
+        <div class="part-row"><span class="part-name">DGA</span><span class="part-bar"><i style="width:31%"></i></span><span class="part-score">31</span></div>
+        <div class="part-row"><span class="part-name">Wafer</span><span class="part-bar"><i class="watch" style="width:57%"></i></span><span class="part-score">57</span></div>
+        <div class="part-row"><span class="part-name">Reticle</span><span class="part-bar"><i style="width:34%"></i></span><span class="part-score">34</span></div>
+        <div class="part-row"><span class="part-name">TIS</span><span class="part-bar"><i style="width:43%"></i></span><span class="part-score">43</span></div>
+        <div class="ai-note"><b>AI 요약</b> · Wafer Table residual 소폭 상승. PM보다는 다음 shift trend 확인 권장.</div>
+      </div>
+      <div class="eq-foot"><span>Last PM · D-11</span><span class="action">Monitor</span></div>
+    </article>
+
+    <article class="equipment-card">
+      <div class="eq-head">
+        <div class="eq-title"><span class="rank watch">WATCH</span><h4>6PIEL110</h4><p>TIS Mark 반복성 저하가 감지된 장비</p></div>
+        <div class="risk-score mid"><span>Risk</span><b>66</b></div>
+      </div>
+      <div class="eq-body">
+        <div class="part-row"><span class="part-name">DGA</span><span class="part-bar"><i style="width:40%"></i></span><span class="part-score">40</span></div>
+        <div class="part-row"><span class="part-name">Wafer</span><span class="part-bar"><i style="width:47%"></i></span><span class="part-score">47</span></div>
+        <div class="part-row"><span class="part-name">Reticle</span><span class="part-bar"><i style="width:33%"></i></span><span class="part-score">33</span></div>
+        <div class="part-row"><span class="part-name">TIS</span><span class="part-bar"><i class="watch" style="width:66%"></i></span><span class="part-score">66</span></div>
+        <div class="ai-note"><b>AI 요약</b> · TIS repeatability가 약화. Lot 시작 전 quick calibration 검토.</div>
+      </div>
+      <div class="eq-foot"><span>Last PM · D-13</span><span class="action">Quick Cal</span></div>
+    </article>
+
+    <article class="equipment-card">
+      <div class="eq-head">
+        <div class="eq-title"><span class="rank normal">LOW</span><h4>6PIEL104</h4><p>Reticle Stage만 소폭 변동, PM 우선도 낮음</p></div>
+        <div class="risk-score low"><span>Risk</span><b>44</b></div>
+      </div>
+      <div class="eq-body">
+        <div class="part-row"><span class="part-name">DGA</span><span class="part-bar"><i style="width:35%"></i></span><span class="part-score">35</span></div>
+        <div class="part-row"><span class="part-name">Wafer</span><span class="part-bar"><i style="width:39%"></i></span><span class="part-score">39</span></div>
+        <div class="part-row"><span class="part-name">Reticle</span><span class="part-bar"><i class="watch" style="width:52%"></i></span><span class="part-score">52</span></div>
+        <div class="part-row"><span class="part-name">TIS</span><span class="part-bar"><i style="width:28%"></i></span><span class="part-score">28</span></div>
+        <div class="ai-note"><b>AI 요약</b> · Reticle Stage drift는 watch 수준이나 수율 영향 근거 부족. 정기 점검 유지.</div>
+      </div>
+      <div class="eq-foot"><span>Last PM · D-8</span><span class="action">Routine</span></div>
+    </article>
+  </section>
+</main>
+</body>
+</html>
