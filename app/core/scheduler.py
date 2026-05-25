@@ -41,6 +41,7 @@ class Scheduler:
         self.last_result: Optional[dict] = None
         self.last_run_at: Optional[datetime] = None
         self.cycle_count: int = 0
+        self.last_run_start: Optional[datetime] = None  # STEP-WATCHDOG
 
     # ── 상태 조회 ────────────────────────────────────────────
     @property
@@ -178,9 +179,19 @@ class Scheduler:
                 logger.error(f"❌ 일간 리포트 루프 오류: {e}", exc_info=True)
 
     async def _run_once(self) -> None:
+        # STEP-WATCHDOG: stuck 감지 - 20분 이상 running이면 강제 해제
         if self._running_pipeline:
-            return
+            if self.last_run_start:
+                elapsed = (datetime.now(config.KST) - self.last_run_start).total_seconds()
+                if elapsed > 1200:
+                    logger.error(f"⚠️ 파이프라인 stuck {int(elapsed)}초 — 강제 해제")
+                    self._running_pipeline = False
+                else:
+                    return
+            else:
+                return
         self._running_pipeline = True
+        self.last_run_start = datetime.now(config.KST)
         self._next_run_at = None
         try:
             await manager.broadcast({
@@ -188,7 +199,11 @@ class Scheduler:
                 "phase": "start",
             })
             # 동기 함수를 워커 스레드에서 실행 → 이벤트 루프 블로킹 방지
-            result = await asyncio.to_thread(pipeline.run_once)
+            # STEP-WATCHDOG: 15분 타임아웃
+            result = await asyncio.wait_for(
+                asyncio.to_thread(pipeline.run_once),
+                timeout=900,
+            )
             # STEP-3B-16: 파이프라인 종료 후 미분석/LLM에러 30건씩 자동 재분석
             try:
                 from app.services.reanalyze import reanalyze_unanalyzed
@@ -210,6 +225,9 @@ class Scheduler:
                 "phase":  "done",
                 "result": result,
             })
+        except asyncio.TimeoutError:
+            logger.error("❌ 파이프라인 타임아웃 (15분 초과) — 강제 종료")
+            await manager.broadcast({"type": "pipeline", "phase": "error", "error": "timeout 900s"})
         except Exception as e:
             logger.error(f"❌ 스케줄러 실행 중 예외: {e}", exc_info=True)
             await manager.broadcast({
