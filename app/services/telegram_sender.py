@@ -8,13 +8,14 @@ PR팀이 모바일에서 한눈에 볼 수 있도록 다음 정보를 압축해 
     - 매칭 키워드, 발행일시(KST)
     - monitor 트랙: 톤 분류 (비우호/양호/미분석) + 비우호문장 인용
     - reference 트랙: '참고' 배지만, 톤 분석 없음
-    - GPT 요약
+    - 요약 (네이버 description, STEP-COST-2)
 
 HTML/Markdown 모드 대신 plain text를 씁니다. 텔레그램의 자동 링크
 미리보기로도 충분히 가독성이 좋고, 이스케이프 버그 위험이 없어요.
 """
 
 import logging
+import threading
 import time
 from datetime import datetime
 from email.utils import parsedate_to_datetime
@@ -134,6 +135,37 @@ def build_message(article: dict, summary: str, tone: dict,
 
 
 # ── 발송 ─────────────────────────────────────────────────────────────
+# STEP-COST-2: 요약 LLM이 빠져 발송 속도가 빨라지면서 텔레그램 429(Too Many
+# Requests)로 기사가 영구 미발송되던 위험 대응.
+#   - 채팅별 최소 간격 (텔레그램 권장: 개인 1건/초, 그룹 20건/분)
+#   - 429면 응답의 retry_after만큼 기다렸다가 재시도 (일반 재시도 횟수와 별도)
+MIN_INTERVAL_PRIVATE = 1.1
+MIN_INTERVAL_GROUP   = 3.1
+MAX_RETRY_AFTER      = 120
+MAX_429_WAITS        = 3
+
+_last_sent: dict[str, float] = {}
+_pace_lock = threading.Lock()
+
+
+def _pace(chat_id: str) -> None:
+    """같은 채팅으로 너무 빨리 연속 발송하지 않도록 대기."""
+    interval = MIN_INTERVAL_GROUP if str(chat_id).startswith("-") else MIN_INTERVAL_PRIVATE
+    with _pace_lock:   # 발송 시각만 예약하고, 대기는 잠금 밖에서 (다른 채팅·스레드를 막지 않게)
+        now = time.monotonic()
+        slot = max(now, _last_sent.get(str(chat_id), 0) + interval)
+        _last_sent[str(chat_id)] = slot
+    if slot > now:
+        time.sleep(slot - now)
+
+
+def _retry_after(resp) -> int:
+    try:
+        return int((resp.json().get("parameters") or {}).get("retry_after") or 0)
+    except Exception:
+        return 0
+
+
 def send_to_chat(chat_id: str, message: str,
                  disable_preview: bool = False,
                  retry: int = 3, delay: int = 2) -> tuple[bool, str]:
@@ -149,17 +181,27 @@ def send_to_chat(chat_id: str, message: str,
     }
 
     last_err = ""
-    for attempt in range(retry):
+    attempt = 0
+    waits_429 = 0
+    while attempt < retry:
+        _pace(chat_id)
         try:
             resp = requests.post(url, json=payload, timeout=10)
             if resp.status_code == 200:
                 logger.info(f"  ✅ 텔레그램 전송 성공 → {chat_id}")
                 return True, ""
             last_err = f"HTTP {resp.status_code}: {resp.text[:120]}"
+            if resp.status_code == 429 and waits_429 < MAX_429_WAITS:
+                wait = min(max(_retry_after(resp), 1), MAX_RETRY_AFTER) + 0.5
+                waits_429 += 1
+                logger.warning(f"  텔레그램 429 → {wait:.0f}초 대기 후 재시도 ({waits_429}/{MAX_429_WAITS})")
+                time.sleep(wait)
+                continue
             logger.warning(f"  텔레그램 실패 [{attempt+1}/{retry}] {last_err}")
         except Exception as e:
             last_err = str(e)
             logger.warning(f"  텔레그램 예외 [{attempt+1}/{retry}]: {e}")
+        attempt += 1
         time.sleep(delay)
 
     return False, last_err

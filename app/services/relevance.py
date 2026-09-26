@@ -1,22 +1,29 @@
 """
-관련성 필터 (4단계).
+관련성 필터 (규칙 기반).
 
 STEP 4A-1:
-- 메이저 언론사 + [단독] 패턴이면 즉시 통과 (Gemini 호출 없이)
-- 화이트리스트 → 블랙리스트 → Gemini 배치 분류
+- 메이저 언론사 + [단독] 패턴이면 즉시 통과
+- 화이트리스트 → 블랙리스트
+
+STEP-COST-2: Gemini 배치 분류 단계 폐기. LLM은 기사를 '제거'만 할 수 있어
+놓침 위험만 만들고(로그상 후보의 약 3% 제거), 10분마다 같은 기사를 반복
+분류하며 비용을 썼다. 규칙으로 결정되지 않은 기사는 모두 통과.
+
+STEP-COST-2 검수 반영: 제목·description에 SK그룹/SK하이닉스 언급이 있으면
+영문 제목 제거·블랙리스트를 모두 면제 (예: "SK hynix unveils ..." 영문 기사,
+"재계 총수들 야구 관람"(description에 최태원), "SK에너지 골프 대회 후원").
 
 처리 순서:
-    1. 영문 전용 기사 제거
-    2. 메이저 언론사 + 단독 자동 통과
-    3. 화이트리스트 키워드 통과
-    4. 도메인/제목 블랙리스트 차단
-    5. 위에서 결정 안 된 기사만 Gemini에게 일괄 분류
+    1. SK 언급(제목+description) → 무조건 통과
+    2. 영문 전용 기사 제거
+    3. 메이저 언론사 + 단독 자동 통과
+    4. 화이트리스트 키워드 통과
+    5. 도메인/제목 블랙리스트 차단
+    6. 나머지는 통과
 """
 
 import logging
 import re
-
-from app.services.gemini_client import get_client
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +50,28 @@ WHITELIST_KEYWORDS = [
     "반도체",
 ]
 
+# ── SK그룹·SK하이닉스 언급 (제목+description) → 필터 면제 ─────────────
+# 영문 토큰은 단어 경계로 검사 ("desktop" 속 "skt" 같은 오탐 방지)
+SK_KEYWORDS = [
+    "sk하이닉스", "하이닉스", "skhynix", "sk hynix", "hynix", "솔리다임", "solidigm", "곽노정",
+    "sk그룹", "sk(주)", "sk주식회사", "sk스퀘어", "sk이노베이션", "sk온", "sk텔레콤", "skt",
+    "sk가스", "sk디스커버리", "sk바이오팜", "sk바이오사이언스", "sk네트웍스", "sk실트론",
+    "sk시그넷", "sk에너지", "skc", "sk에코플랜트", "sk케미칼", "sk브로드밴드", "sk증권",
+    "sk e&s", "sk이엔에스", "sk매직", "sk쉴더스", "sk엔무브", "sk ax", "sk플라즈마",
+    "sk에어플러스", "sk머티리얼즈", "sk지오센트릭", "sk아이이테크놀로지", "sk바이오텍",
+    "최태원", "최창원", "최재원",
+]
+_SK_PATTERNS = [
+    re.compile(r"(?<![a-z])" + re.escape(k) + r"(?![a-z])") if k.isascii() else re.compile(re.escape(k))
+    for k in SK_KEYWORDS
+]
+
+
+def _mentions_sk(title: str, description: str) -> bool:
+    text = f"{title} {description}".lower()
+    return any(p.search(text) for p in _SK_PATTERNS)
+
+
 # ── 메이저 언론사 도메인 ──────────────────────────────────────
 MAJOR_PRESS_DOMAINS = [
     "chosun.com", "joongang.co.kr", "donga.com",
@@ -55,9 +84,6 @@ MAJOR_PRESS_DOMAINS = [
 EXCLUSIVE_PATTERNS = [
     r"\[단독\]", r"<단독>", r"단독:", r"【단독】", r"\(단독\)",
 ]
-
-BATCH_SIZE = 50
-
 
 def _clean_title(title: str) -> str:
     return re.sub(r"<[^>]+>", "", title or "").strip()
@@ -111,73 +137,6 @@ def _is_blacklisted(title: str, link: str,
     return False
 
 
-def _gemini_classify_batch(batch: list[dict]) -> list[dict]:
-    if not batch:
-        return []
-
-    client = get_client()
-    if client is None:
-        logger.warning("Gemini 미사용 — 모든 기사 통과 처리")
-        return batch
-
-    # STEP-REL-1: 제목 + description 요약(150자) 같이 전달
-    titles_text = "\n".join(
-        f"{i+1}. {_clean_title(a.get('title', ''))} | {_clean_title(a.get('description', ''))[:150]}"
-        for i, a in enumerate(batch)
-    )
-
-    prompt = (
-        "아래 기사 목록(번호. 제목 | description요약)을 보고 각 번호에 대해 판단하시오.\n제목이 모호해도 description에 핵심 키워드가 있으면 YES.\n\n"
-        "YES로 판단하는 경우:\n"
-        "- 반도체, 메모리(HBM·D램·낸드), AI칩, 파운드리 관련\n"
-        "- IT 기업(애플·구글·MS·메타·아마존·엔비디아·TSMC 등) 사업·실적\n"
-        "- 관련 기업의 투자·인수합병·공장·인력 뉴스\n"
-        "- 반도체 관련 정부 정책, 수출규제, 공급망\n"
-        "- SK·SK하이닉스·곽노정·최태원 관련 모든 뉴스\n\n"
-        "NO로 판단하는 경우:\n"
-        "- 스포츠(야구·축구·골프·올림픽 등)\n"
-        "- 연예·드라마·아이돌·배우 사생활\n"
-        "- 날씨·부동산·요리·여행·패션 단순 기사\n\n"
-        "출력 형식: 번호:YES 또는 번호:NO (한 줄에 하나씩, 다른 텍스트 없이)\n\n"
-        f"{titles_text}"
-    )
-
-    try:
-        resp = client.models.generate_content(
-            model="gemini-flash-lite-latest",
-            contents=prompt,
-            config={"max_output_tokens": len(batch) * 15, "temperature": 0},
-        )
-        answer = resp.text.strip()
-    except Exception as e:
-        logger.error(f"❌ Gemini 호출 실패 (전체 통과 처리): {e}")
-        return batch
-
-    result_map: dict[int, bool] = {}
-    for line in answer.splitlines():
-        line = line.strip()
-        if not line or ":" not in line:
-            continue
-        idx_str, val_str = line.split(":", 1)
-        try:
-            idx = int(idx_str.strip())
-            result_map[idx] = val_str.strip().upper().startswith("YES")
-        except ValueError:
-            continue
-
-    relevant = []
-    removed_count = 0
-    for i, article in enumerate(batch):
-        if result_map.get(i + 1, True):
-            relevant.append(article)
-        else:
-            removed_count += 1
-            logger.info(f"  ✂️ Gemini 제외: {_clean_title(article.get('title', ''))[:40]}")
-
-    logger.info(f"  → 배치 {len(batch)}건 중 {removed_count}건 제거, {len(relevant)}건 통과")
-    return relevant
-
-
 def filter_relevant(articles: list[dict], settings: dict) -> list[dict]:
     if not articles:
         return []
@@ -189,15 +148,21 @@ def filter_relevant(articles: list[dict], settings: dict) -> list[dict]:
     domain_bl = [d.lower() for d in settings.get("domain_blacklist", [])]
     title_bl  = settings.get("title_blacklist", [])
 
+    sk_pass      = []  # SK 언급 → 필터 면제 (STEP-COST-2)
     auto_pass    = []  # 메이저+단독 자동 통과
     whitelisted  = []
-    to_gemini    = []
+    undecided    = []  # 규칙으로 결정 안 된 기사 → 통과 (STEP-COST-2)
     removed_en   = 0
     removed_bl   = 0
 
     for a in articles:
         title = _clean_title(a.get("title", ""))
         link  = a.get("link") or a.get("originallink", "")
+
+        # 0단계: SK그룹/SK하이닉스 언급 → 무조건 통과
+        if _mentions_sk(title, _clean_title(a.get("description", ""))):
+            sk_pass.append(a)
+            continue
 
         # 1단계: 영문 전용 제거
         if _is_english_only(title):
@@ -220,32 +185,16 @@ def filter_relevant(articles: list[dict], settings: dict) -> list[dict]:
             removed_bl += 1
             continue
 
-        to_gemini.append(a)
+        undecided.append(a)
 
+    final = sk_pass + auto_pass + whitelisted + undecided
     logger.info(
+        f"🏷️ SK언급: {len(sk_pass)} | "
         f"🌐 영문제거: {removed_en} | "
         f"⭐ 메이저단독: {len(auto_pass)} | "
         f"✅ 화이트리스트: {len(whitelisted)} | "
         f"🚫 블랙리스트: {removed_bl} | "
-        f"🤖 Gemini 후보: {len(to_gemini)}"
-    )
-
-    if not to_gemini:
-        final = auto_pass + whitelisted
-        logger.info(f"🏁 최종 통과: {len(final)}건 (Gemini 호출 없음)")
-        return final
-
-    relevant_gemini: list[dict] = []
-    total_batches = (len(to_gemini) + BATCH_SIZE - 1) // BATCH_SIZE
-    for i in range(total_batches):
-        start = i * BATCH_SIZE
-        batch = to_gemini[start : start + BATCH_SIZE]
-        logger.info(f"🤖 Gemini 배치 [{i+1}/{total_batches}] — {len(batch)}건")
-        relevant_gemini.extend(_gemini_classify_batch(batch))
-
-    final = auto_pass + whitelisted + relevant_gemini
-    logger.info(
-        f"🏁 최종 통과: {len(final)}건 "
-        f"(메이저단독 {len(auto_pass)} + 화이트리스트 {len(whitelisted)} + Gemini통과 {len(relevant_gemini)})"
+        f"➡️ 규칙 미결정 통과: {len(undecided)} | "
+        f"🏁 최종 통과: {len(final)}"
     )
     return final

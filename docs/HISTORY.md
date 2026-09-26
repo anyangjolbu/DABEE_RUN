@@ -4,6 +4,59 @@
 
 ---
 
+## 2026-09-27 — STEP-COST-2: LLM 비용 절감 (Gemini → OpenAI gpt-6-luna Flex)
+- **무엇을**: LLM 호출을 톤분류·일간리포트 두 곳으로 축소하고 OpenAI `gpt-6-luna` Flex 티어로 전환. 신규 `app/services/llm_client.py`(Responses API + json_schema strict, `llm_usage` 테이블로 KST 일자별 비용 누적, 선택적 일일 상한 `llm_daily_budget_usd` — 기본 null=무제한, 양수=상한, 0=LLM 끔). `relevance.py` Gemini 배치 분류 폐기(규칙 미결정 기사는 통과). `summarizer.py` LLM 폐기 → description 사용. `tone_analyzer.py` 프롬프트 최소화, 비우호일 때만 근거·인용 1문장 출력, 대상(하이닉스·솔리다임·곽노정·최태원) 미등장 시 LLM 없이 확정 '미분석'. `report_impact.py` Stage1 LLM → 규칙 점수(`_prescore`)로 트랙별 상위 80건, Stage2만 LLM 1회. `reanalyze.py`: 확정 미분석은 `reanalyze_attempts=99`로 영구 제외, Flex 429·상한 도달은 횟수 유지하고 다음 사이클 재시도, 최근 72시간·(상한 설정 시) 상한의 50% 이내로 제한. `pipeline.py`: 기사 단위 예외 격리, 사이클당 톤분류 LLM 시간 한도 480초(초과분은 미분석 저장·발송 후 재분석). `GET /api/admin/llm-usage` 추가. 인증 없이 settings를 덮어쓰던 `model-switch` 엔드포인트, `gemini_client.py`, `google-genai` 의존성 제거.
+- **왜**: 하루 수천 건 수집에서 Gemini 과금이 하루 약 $5. 목표는 월 $10 이하이며, 기사를 놓치지 않는 것이 요약 품질보다 우선. 실측으로 확인한 비용 원인은 네 가지: ① 관련성 필터가 DB 중복 제거보다 먼저 돌아 같은 기사를 10분마다 재분류(두 번째 사이클 후보 145건 중 신규 13건) ② `gemini-flash-latest` 별칭이 더 비싼 모델(3.5→3.8 Flash)로 자동 교체 ③ 요약·톤분류가 같은 본문으로 2회 호출 ④ '관련없음' 재분석 반복. 또한 `gemini-flash-lite-latest`(=3.5-flash-lite)가 `thinking_budget=0`을 400으로 거부해 일간 리포트가 매번 규칙 fallback으로 나가던 버그 발견.
+- **검증**: 기존 운영 라벨 기준 206건(비우호 126) 비교에서 비우호 판정 114/126(90.5%, 판정 차이는 대부분 경계 사례). 건당 $0.000067, Flex 동시 20건 20/20 성공(최대 18초). 사본 DB로 실제 파이프라인 1회(20건 저장, 발송 0), 재분석(보류 기사 → 비우호 채움), 일간 리포트(384건 → 규칙 80건 → LLM 7초, $0.0015) 확인. 예산 초과·키 없음·429·타임아웃·400 시 모두 미분석(재시도)으로 저장·발송 계속.
+- **검수 반영 (서브에이전트 2개: 기사 누락 관점 + 기능 버그)**:
+  - 텔레그램 429를 받으면 `retry_after`만큼 대기 후 재시도. 채팅별 최소 발송 간격 추가(개인 1.1초, 그룹 3.1초). 로컬 DB에서 429 영구 실패 7건 확인.
+  - 재발송 `pipeline.resend_pending()` 추가: 최근 6시간 안에 발송 전·실패로 남은 기사를 아직 성공하지 못한 수신자에게 다시 보냄. 수신자별 실패 5회까지. `sent_status=3`(수신자 없음) 신설.
+  - 발송 기록(send_log) 단계 예외 격리.
+  - 네이버 페이지 넘김: 1페이지가 전부 '마지막 수집 − 30분' 이후 기사면 다음 페이지 수집(최대 10). 장애 공백만큼 lookback 자동 확장(최대 24시간). 호출 간 0.15초 간격(012 완화). 기본 `naver_display_count` 100.
+  - monitor 테마를 먼저 수집해, 중복 URL이 reference로 귀속되지 않게 함.
+  - 관련성 필터: 제목·description에 SK그룹/SK하이닉스 언급이 있으면 영문 제목 제거·블랙리스트 면제. 계열사 목록 보강.
+  - 본문 크롤링이 실패해도 제목·description으로 reference → monitor 승격.
+  - llm_client 상태 세분화(auth/config/insufficient_quota). 응답 형식 이상에도 예외 없음. 상한 0 = LLM 끔, NaN/inf·문자열은 무제한으로 처리.
+  - 사용자 결정으로 일일 상한 기본값 $0.30 → 무제한(null). 비용 기록은 유지.
+  - Flex 429면 해당 기사만 Standard로 1회 재시도.
+  - 전역 LLM 장애 시 그 사이클의 남은 기사는 LLM 생략.
+  - 재분석: 시간 한도 150초. 전역 장애·타임아웃이면 횟수 유지하고 중단. error는 연속 2회면 중단. 이미 발송된 기사가 비우호로 바뀌면 "비우호 재분류" 후속 알림. 관리자 재분석은 `max_age_hours`를 받고 중단 사유 표시.
+  - 일간 리포트: 타임아웃 180초, 2회차부터 Standard 티어, 설정 오류면 즉시 fallback, 검증 예외도 fallback, 트랙 몫 재배분.
+  - 스케줄러 주기 값 오류 방어. README를 OpenAI 기준으로 수정.
+  - 모의 테스트 37/37 통과, 배포 파일만으로 `import app.main` 확인(google 패키지 없이).
+- **알려진 한계 (미변경)**:
+  - 워치독 `wait_for(900)`은 스레드를 취소하지 못해 드물게 사이클이 겹칠 수 있음. 중복 발송은 URL UNIQUE가 막고, 비용은 약간 늘어남. 수집이 멈추는 쪽보다 낫다고 판단해 유지.
+  - 최초 분류가 '미분석'으로 나간 기사는 이후 재분석 결과가 비우호일 때만 후속 알림을 보냄.
+- **배포 시 필수**: Railway 환경변수에 `OPENAI_API_KEY`(또는 `OPEN_AI_API_KEY`) 추가. 없으면 톤분류·리포트 코멘트만 멈추고 수집·발송은 정상. 커밋에 신규 `app/services/llm_client.py`를 반드시 포함할 것(누락 시 기동 실패). 미추적 `app/services/report_impact_v2*.py` 등은 `gemini_client`를 import하므로 커밋에 넣지 말 것.
+
+## 2026-05-08 — STEP-PRESS-3b: 언론사 분석 페이지 (`/press`)
+- **무엇을**: 공개 영역에 4번째 페이지 `/press` 추가. `app/api/public.py`에 `GET /api/press/stats`(언론사별 양호/비우호/PR Index + 버킷별 스파크라인)과 `GET /api/press/trend?press=<이름>&range=<7d|4w|3m>`(특정 언론사 추이) 두 엔드포인트 신규. `app/main.py`에 `/press` 라우트 + `base.html` 네비에 "언론사" 링크 추가. `templates/public/press.html` 신규 (정렬·범위 토글·스파크라인·모달).
+- **왜**: 어떤 언론사가 SK하이닉스를 어떤 톤으로 보도하는지 한 번에 파악할 수단 부재. 비우호 비중 높은 언론사를 PR팀이 식별·관리할 필요.
+- **어떻게**: `range` 파라미터로 7일(일별 7버킷) / 4주(주별 4버킷) / 3개월(주별 13버킷) 세 모드. 표본 신뢰도 `min_n`(기본 5/10/20)도 range에 따라 자동. `score = (good-bad)/(good+bad)*100`로 PR Index 동일 산식, 미분석 분모 제외.
+- **사이드 이펙트**: 같은 파일 안에서 파이썬 빌트인 `range`가 쿼리 파라미터 `range_`(alias=`range`)와 처음에 충돌해 import-time `NameError` 발생 → `range_` 일관 사용으로 해결.
+
+## 2026-05-08 — 흐름점수 임계값 상향 + 트렌드 차트 라벨 강화
+- **무엇을**: `dashboard.js`의 hero pill·heroTitle·tooltip 분기 임계값을 ±20 → ±60으로 상향. 7일 PR Index 차트 X축 라벨을 "요일(굵게) / 월·일(작게)" 두 줄로 개편하고, 각 데이터 포인트 옆에 점수 자체를 컬러 라벨로 표시. 캐시 버스팅 `?v=5j`까지 진행.
+- **왜**: ±20 기준은 거의 모든 날을 "긍정/부정" 둘 중 하나로 끌어가 혼조 구간이 사실상 사라짐. 실제 감각상 비우호가 어지간히 누적돼야 "부정 우세"로 부르는 게 맞다는 운영 판단. 차트도 숫자가 안 보이니 톤만 막연히 보였음.
+
+## 2026-05-07 — STEP-DAILY-1: 일간 리포트 슬롯 시스템(06/18 KST) + 본문 크롤링 정확도
+- **무엇을**: 단일 18시 발송 → **morning(06:00) / evening(18:00) 두 슬롯**으로 분할. 각 슬롯은 직전 12시간 윈도우(어제 18 ~ 오늘 06 / 오늘 06 ~ 오늘 18)의 monitor+reference 기사를 모아 LLM 1회 호출로 ① 톱5 PR 코멘터리 ② 당사·그룹 톱10 ③ 업계동향 톱10을 동시 산출. 신규 모듈 `app/services/report_impact.py`(곽노정 CEO 시점 A+B+C 채점 프롬프트 + JSON 스키마 강제). `app/services/report_builder.py` 전면 재작성(`run_slot_report`). `app/core/scheduler._daily_report_loop` morning_kst/evening_kst 두 시각 처리. `daily_reports` 테이블에 `slot TEXT NOT NULL DEFAULT 'evening'` + `payload_json TEXT` ALTER, `UNIQUE(date, slot)`로 중복 발송 차단. `app/main.py`의 `/report` 라우트가 `payload.impact`를 풀어 articles_map과 함께 템플릿에 전달, `report.html` 임팩트 카드/톱5/톱10 UI로 대규모 개편. 발송 메시지는 4096자 안전 컷(8건→6건 단계 축소). 같은 작업 내에서 `pipeline.py`/`reanalyze.py`의 본문 크롤링도 "네이버 URL 1순위 → 부족 시 원문 URL fallback → 그래도 부족 시 description fallback"의 3-Tier로 정비. `relevance.WHITELIST_KEYWORDS`에 SK 그룹 지주·계열사(SKT·SK스퀘어·SK이노베이션·SK온·SK가스·SK바이오팜 등) + 최창원·최재원 회장 일가 추가. 어드민에 `POST /api/admin/api/admin/model-switch`(요약/톤 모델을 lite-latest로 강제) 임시 엔드포인트 추가.
+- **왜**: 18시 단발 리포트는 오전 회의 전 모니터링이 빈다는 피드백. 단순 시간순 컷은 "코스피 7000 돌파"·"삼성전자 시총 1조 달러" 같은 매크로/경쟁사 기사가 톱에 올라 PR팀에게 의미 없음 → CEO 관점 점수(A: 주체 자사인가, B: 의사결정에 영향, C: 임직원 질문 여지)로 재정렬. 본문 크롤링은 STEP-3B-37/38 이후에도 description만 들어가 톤분석 정확도가 떨어지던 케이스 잔존. 화이트리스트는 SK 계열사 뉴스가 reference로도 안 잡히고 누락되던 사례 발견.
+- **검증**: morning 슬롯 첫 발송 시 톱5 코멘터리 형식("...에 대한 대응이 필요합니다 (A40+B30+C30=100)") 확인, `daily_reports` 테이블에 (date, 'morning')/('evening') 두 행 정상 저장.
+- **남은 일**: model-switch 엔드포인트 라우트 prefix 중복(`/api/admin/api/admin/...`) — 다음 정리 사이클에 일반화.
+
+## 2026-05-06 — collection_lookback: 일 → 시간 단위 + google-genai SDK 상향
+- **무엇을**: settings·UI의 수집 기간 키를 `collection_lookback_days` → `collection_lookback_hours`로 변경. `naver_api._filter_by_lookback(articles, hours)`도 시간 단위 cutoff로 교체, 기본값 3시간. 어드민 대시보드의 입력란 라벨/단위 동시 수정. `requirements.txt`의 `google-genai`를 `0.3.0` → `>=1.0.0`으로 상향(ThinkingConfig 지원 필수).
+- **왜**: 10분 주기 수집에서 "1일치"는 너무 길어 어제 같은 기사가 매 사이클 재진입 후보로 떠오름 → 수집 비용·노이즈 증가. 시간 단위로 좁혀 fresh 기사만 통과시키는 게 합리적. 한편 STEP-3B-40에서 `thinking_config` 파라미터를 도입했는데 0.3.0 SDK는 `ThinkingConfig` 미지원이라 prod 배포 시 ImportError 발생 → SDK 상향이 선결.
+
+## 2026-05-06 — STEP-3B-40~41: 요약 품질 개선(thinking 비활성 + 일시 오류 재시도)
+- **무엇을**: `summarizer.py`에 `types.ThinkingConfig(thinking_budget=0)` 적용 — lite/flash 공통으로 추론 토큰을 0으로 강제. 503/UNAVAILABLE/429/RESOURCE_EXHAUSTED/DEADLINE_EXCEEDED/timeout 류 일시 오류에 대해 `RETRY_MAX=3, RETRY_DELAY=2s` 재시도 루프 추가, transient 판별은 `_is_transient()` 헬퍼.
+- **왜**: thinking 토큰이 max_output_tokens를 갉아먹어 요약 본문이 어색하게 잘림. lite는 thinking이 품질에 거의 기여 안 함이 비교상 확인. 또한 production에서 503·429 일시 장애로 요약이 description 폴백되는 사례 누적 — 단순 재시도로 대부분 회복 가능.
+
+## 2026-05-06 — STEP-3B-39: reanalyze.py에 description 3-Tier fallback
+- **무엇을**: `reanalyze_unanalyzed()`에서 본문이 150자 미만이면 description(50자 이상)으로 톤분석을 다시 시도하도록 폴백 로직 추가. 본문·description 모두 부족한 경우만 보류(continue). `articles.reanalyze_attempts` 카운터는 그대로 유지.
+- **왜**: 일부 매체는 네이버 본문/원문 둘 다 셀렉터 매칭 실패로 0~100자만 추출되며 매번 "본문 부족"으로 보류 → cap에 도달할 때까지 의미 있는 재분석이 안 됨. description은 네이버 API 직접 제공값이라 연관기사 오염이 없어 폴백 자료로 안전.
+
 ## 2026-05-06 — STEP-3B-38: 미분석 무한 재시도 cap (토큰 낭비 차단)
 - **무엇을**: `articles` 테이블에 `reanalyze_attempts INTEGER DEFAULT 0` 컬럼 추가 (`models.py` ALTER 마이그레이션). `reanalyze.py`에 `MAX_REANALYZE_ATTEMPTS = 3` 도입 — 재분석 SELECT에 `AND COALESCE(reanalyze_attempts, 0) < 3` 필터, 성공·예외 경로 모두에서 카운터 +1.
 - **왜**: STEP-3B-15에서 `LLM에러` 라벨을 `미분석`으로 통합하면서 "Gemini가 정상적으로 '관련없음'으로 판정한 기사"와 "진짜 LLM 호출 실패한 기사"가 같은 라벨로 섞였음. 스케줄러가 매 사이클 종료 후 미분석 30건씩 자동 재분석하는데 (`schedule_interval_minutes=10` → 시간당 180건), `temperature=0`이라 본문이 그대로면 Gemini는 영원히 같은 "관련없음" 답을 돌려주며 토큰만 소모. 라벨 분리(Option A)는 dashboard/통계 등 후속 작업이 커서 보류, 일반적 cap 정책(Option C)으로 빠르게 차단.

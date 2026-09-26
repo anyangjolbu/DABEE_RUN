@@ -110,8 +110,13 @@ class Scheduler:
         await self._run_once()
 
         while not self._stop_event.is_set():
-            settings = settings_store.load_settings()
-            interval = max(1, int(settings.get("schedule_interval_minutes", 10)))
+            # 설정 파일 손상·잘못된 값이 수집 루프 자체를 멈추지 않게 (기본 10분)
+            try:
+                settings = settings_store.load_settings()
+                interval = max(1, int(settings.get("schedule_interval_minutes", 10)))
+            except Exception as e:
+                logger.error(f"❌ schedule_interval_minutes 읽기 실패 → 10분: {e}")
+                interval = 10
             self._next_run_at = datetime.now(config.KST) + timedelta(minutes=interval)
 
             # interval 동안 1초씩 쪼개서 대기 (정지 신호 즉시 반응)
@@ -205,6 +210,7 @@ class Scheduler:
                 timeout=900,
             )
             # STEP-3B-16: 파이프라인 종료 후 미분석/LLM에러 30건씩 자동 재분석
+            # (STEP-COST-2: 재분석 자체에 시간 한도 150초)
             try:
                 from app.services.reanalyze import reanalyze_unanalyzed
                 reanalyze_result = await asyncio.to_thread(reanalyze_unanalyzed, 30)

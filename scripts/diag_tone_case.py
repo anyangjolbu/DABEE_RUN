@@ -83,7 +83,7 @@ def main():
 
     # 톤 분석 직접 호출
     article["_crawled_body"] = body
-    print(f"\n[3] 톤 분석 호출 (model={settings.get('gpt_model_tone')})")
+    print(f"\n[3] 톤 분석 호출 (model={settings.get('llm_model')})")
     print("    (응답 5~15초 대기)")
     result = tone_analyzer.analyze_tone(article, "테스트", settings)
 

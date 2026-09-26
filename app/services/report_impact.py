@@ -18,6 +18,11 @@
 주의:
 - article_id는 여전히 대표 기사 1건을 뜻한다. 같은 이슈의 중복 기사는 내부적으로 제거한다.
 - LLM 실패 시에도 규칙 기반 점수/중복 제거로 보고서 품질을 최대한 유지한다.
+
+STEP-COST-2:
+- Stage1(LLM 후보 압축) 폐기 → 규칙 점수(_prescore)로 트랙별 상위 후보만 추림
+- Stage2는 OpenAI gpt-6-luna(Flex) 1회 호출, json_schema strict
+- Gemini thinking_budget=0 이 3.5-flash-lite에서 400을 내며 매번 fallback되던 문제 해소
 """
 
 from __future__ import annotations
@@ -29,16 +34,15 @@ import re
 import time
 from typing import Optional
 
-from google.genai import types
-
-from app.services.gemini_client import get_client
+from app.services import llm_client
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "gemini-flash-lite-latest"
 MAX_OUTPUT_TOKEN = 8192
 RETRY_MAX = 3
-RETRY_DELAY = 2
+RETRY_DELAY = 20          # 재시도 간격(초). 2회차부터는 Standard 티어 (하루 2회라 비용 무시 가능)
+LLM_TIMEOUT = 180         # 06/18시 발송이 오래 밀리지 않게 (최악 약 10분 후 규칙 fallback)
+STAGE2_MAX = 80           # Stage2(LLM)에 넣을 최대 후보 수 (트랙별 절반)
 
 # ──────────────────────────────────────────────────────────────
 #  프롬프트: 특정 이슈 카테고리 하드코딩보다 '판단 패턴'을 일반화
@@ -112,13 +116,11 @@ DEFAULT_IMPACT_PROMPT = """당신은 SK하이닉스 홍보/대외협력 조직�
 [출력 형식]
 반드시 아래 구조의 단일 JSON 객체만 응답합니다. 설명, 마크다운, 코드블록은 금지합니다.
 {
-  "top5_commentary": {
-    "rank_1": {"article_id": 123, "comment": "..."},
-    "rank_2": {"article_id": 456, "comment": "..."}
-  },
+  "top5_commentary": [{"article_id": 123, "comment": "..."}],
   "company_group_top10": [{"article_id": 123, "score": 90}],
   "industry_top10": [{"article_id": 789, "score": 85}]
 }
+top5_commentary는 중요한 이슈부터 순서대로 최대 5개입니다.
 article_id는 반드시 입력에 등장한 ID만 사용합니다.
 """
 
@@ -446,7 +448,7 @@ def _build_prompt(articles: list[dict], categories: dict[int, str], system_promp
         title = (a.get("title_clean") or a.get("title") or "").replace("|", "/")[:160]
         summary = (a.get("summary") or a.get("description") or "").replace("|", "/").replace("\n", " ")[:320]
         tc = a.get("tone_classification") or "-"
-        conf = a.get("tone_confidence") or "-"
+        conf = a.get("tone_confidence") or ""
         hostile = a.get("tone_hostile") or 0
         total = a.get("tone_total") or 0
         reason = (a.get("tone_reason") or "").replace("|", "/").replace("\n", " ")[:220]
@@ -466,7 +468,12 @@ def _build_prompt(articles: list[dict], categories: dict[int, str], system_promp
         if summary:
             lines.append(f"  요약: {summary}")
         if tc and tc != "-":
-            lines.append(f"  톤: {tc} (confidence={conf}, hostile={hostile}/{total})")
+            extra = []
+            if conf and conf != "n/a":
+                extra.append(f"confidence={conf}")
+            if total:
+                extra.append(f"hostile={hostile}/{total}")
+            lines.append(f"  톤: {tc}" + (f" ({', '.join(extra)})" if extra else ""))
         if reason:
             lines.append(f"  톤 사유: {reason}")
 
@@ -505,11 +512,6 @@ def _extract_json(text: str) -> Optional[dict]:
     if parsed is None or isinstance(parsed, list) or not isinstance(parsed, dict):
         return None
     return parsed
-
-
-def _is_transient(err: Exception) -> bool:
-    s = str(err).lower()
-    return any(k in s for k in ("503", "unavailable", "429", "resource_exhausted", "deadline_exceeded", "timeout"))
 
 
 def _article_map(articles: list[dict]) -> dict[int, dict]:
@@ -608,181 +610,8 @@ def _validate(payload: dict, valid_ids: set[int], articles: list[dict] | None = 
 
 
 # ──────────────────────────────────────────────────────────────
-#  Stage 1: 많은 기사 → 내신 후보 압축
+#  Stage 1: 많은 기사 → 내신 후보 압축 (STEP-COST-2: 규칙 점수)
 # ──────────────────────────────────────────────────────────────
-STAGE1_PROMPT = """당신은 SK하이닉스 홍보/대외협력 조직의 뉴스 브리핑 에디터입니다.
-아래 기사 각각에 대해 '경영진 내신 리포트에 올릴 가치'를 0~100점으로 평가합니다.
-
-[점수 기준]
-90~100: 당사 직접 사안 또는 즉각 대응/메시지 관리가 필요한 핵심 이슈
-75~89: 당사·그룹·고객사·경쟁사·정책·기술 로드맵에 중요한 영향이 있는 이슈
-55~74: 업계 흐름 파악에 필요한 의미 있는 이슈
-30~54: 참고 가능하지만 오늘 주요 보고 우선순위는 낮은 기사
-0~29: 단순 시황, 제목만 다른 반복, 무관 기사, 생활/일반 정치 사건
-
-[중요]
-- 제목에 SK하이닉스가 있어도 목표가/주가 반복이면 과대평가하지 마십시오.
-- 자사 직접 기사가 아니어도 정책, 노조/성과급, 고객사 AI 투자, 경쟁사 팹/기술, 공급망/지정학 리스크는 높게 평가할 수 있습니다.
-- 단순 코스피/환율/나스닥/시총 기사만으로는 낮게 평가하십시오.
-
-[출력]
-반드시 단일 JSON 객체만 출력합니다. 설명·사유·마크다운·코드블록은 금지합니다.
-키는 기사 id를 문자열로, 값은 0~100 정수 점수로 씁니다.
-예: {"123":85,"124":12,"125":67}
-입력된 모든 id를 빠짐없이 포함합니다.
-"""
-
-
-def _parse_stage1_scores(text: str) -> dict[int, int]:
-    """Stage1 응답 파서.
-
-    JSON 객체 {"123":85}를 기본으로 받는다. 과거/비정상 응답인
-    JSON 배열 [{"id":123,"s":85}]과 일부 손상 텍스트도 최소 복구한다.
-    """
-    if not text:
-        return {}
-    t = text.strip()
-    if t.startswith("```"):
-        t = re.sub(r"^```[a-zA-Z]*\n?", "", t)
-        t = re.sub(r"\n?```$", "", t).strip()
-
-    # 1) 정상 JSON 우선
-    try:
-        parsed = json.loads(t)
-        out: dict[int, int] = {}
-        if isinstance(parsed, dict):
-            for k, v in parsed.items():
-                try:
-                    out[int(k)] = max(0, min(100, int(v)))
-                except Exception:
-                    continue
-            return out
-        if isinstance(parsed, list):  # 구버전 호환
-            for item in parsed:
-                if not isinstance(item, dict):
-                    continue
-                try:
-                    aid = int(item.get("id"))
-                    s = int(item.get("s", item.get("score", 0)))
-                    out[aid] = max(0, min(100, s))
-                except Exception:
-                    continue
-            return out
-    except json.JSONDecodeError:
-        pass
-
-    # 2) JSON 객체가 앞뒤 설명 때문에 깨진 경우, 가장 큰 객체 범위만 추출
-    start = t.find("{")
-    end = t.rfind("}")
-    if start >= 0 and end > start:
-        try:
-            parsed = json.loads(t[start:end + 1])
-            if isinstance(parsed, dict):
-                out = {}
-                for k, v in parsed.items():
-                    try:
-                        out[int(k)] = max(0, min(100, int(v)))
-                    except Exception:
-                        continue
-                return out
-        except json.JSONDecodeError:
-            pass
-
-    # 3) 최후 복구: "123":85 또는 {"id":123,"s":85} 패턴
-    out: dict[int, int] = {}
-    for k, v in re.findall(r'"?(\d+)"?\s*:\s*(\d{1,3})', t):
-        try:
-            out[int(k)] = max(0, min(100, int(v)))
-        except Exception:
-            continue
-    if out:
-        return out
-
-    for k, v in re.findall(r'\{\s*"id"\s*:\s*(\d+)\s*,\s*"s"\s*:\s*(\d{1,3})\s*\}', t):
-        try:
-            out[int(k)] = max(0, min(100, int(v)))
-        except Exception:
-            continue
-    return out
-
-
-def _stage1_filter(articles: list[dict], categories: dict[int, str]) -> dict[int, int]:
-    if not articles:
-        return {}
-    try:
-        from google import genai
-        from google.genai import types as gtypes
-    except ImportError:
-        logger.error("[Stage1] google-genai 미설치")
-        return {a["id"]: _prescore(a)[0] for a in articles if "id" in a}
-
-    import os
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        logger.warning("[Stage1] GEMINI_API_KEY 없음 - 규칙 점수 fallback")
-        return {a["id"]: _prescore(a)[0] for a in articles if "id" in a}
-
-    # JSON 배열 [{id,s}]는 8192 토큰 근처에서 잘려 정규식 복구가 반복될 수 있다.
-    # 객체 맵 {"id":score}로 출력 토큰을 줄이고, 배치 크기도 낮춰 truncate 가능성을 줄인다.
-    BATCH_SIZE = 300
-    client = genai.Client(api_key=api_key)
-    all_scores: dict[int, int] = {}
-    batches = [articles[i:i + BATCH_SIZE] for i in range(0, len(articles), BATCH_SIZE)]
-    logger.info(f"[Stage1] {len(articles)}건 → {len(batches)}배치 ({BATCH_SIZE}건씩, compact-json-map)")
-
-    for bi, batch in enumerate(batches, 1):
-        batch_by_id: dict[int, dict] = {}
-        lines = []
-        for a in batch:
-            try:
-                aid = int(a.get("id"))
-            except Exception:
-                continue
-            batch_by_id[aid] = a
-            cat = categories.get(aid, "industry")
-            title = (a.get("title_clean") or a.get("title") or "")[:90]
-            summary = (a.get("summary") or a.get("description") or "")[:120]
-            tone = a.get("tone_classification") or "-"
-            press = (a.get("press") or "-")[:20]
-            track = a.get("track") or "-"
-            # Stage1은 LLM 점수만 받는다. prescore/규칙 점수는 섞지 않아 후보 압축 노이즈를 줄인다.
-            lines.append(f"{aid}|{cat}|{track}|{tone}|{press}|{title} :: {summary}")
-        full_prompt = STAGE1_PROMPT + "\n[기사 목록]\n" + "\n".join(lines)
-
-        try:
-            resp = client.models.generate_content(
-                model="gemini-flash-lite-latest",
-                contents=full_prompt,
-                config=gtypes.GenerateContentConfig(
-                    temperature=0,
-                    max_output_tokens=8192,
-                    response_mime_type="application/json",
-                ),
-            )
-            text = (resp.text or "").strip()
-            parsed_scores = _parse_stage1_scores(text)
-            if len(parsed_scores) < max(1, int(len(batch_by_id) * 0.9)):
-                logger.warning(
-                    f"[Stage1] 배치 {bi} 응답 누락 많음: 입력 {len(batch_by_id)}건 → 파싱 {len(parsed_scores)}건"
-                )
-            else:
-                logger.info(f"[Stage1] 배치 {bi} JSON 파싱 성공: {len(parsed_scores)}/{len(batch_by_id)}건")
-
-            for aid in batch_by_id.keys():
-                llm_s = parsed_scores.get(aid)
-                # 누락분은 0점으로 둔다. 잘릴 정도의 후순위 응답은 Stage2 후보에서 자연스럽게 밀리게 한다.
-                all_scores[aid] = max(0, min(100, int(llm_s))) if llm_s is not None else 0
-            logger.info(f"[Stage1] 배치 {bi}/{len(batches)} 완료")
-        except Exception as e:
-            logger.error(f"[Stage1] 배치 {bi} 실패: {e}")
-            for aid in batch_by_id.keys():
-                all_scores[aid] = 0
-
-    for a in articles:
-        if "id" in a:
-            all_scores.setdefault(int(a["id"]), 0)
-    return all_scores
-
 def _select_top_by_track(articles: list[dict], scores: dict[int, int], per_track: int = 120) -> list[dict]:
     """Stage2 입력 후보를 track별/이슈별로 다양하게 보존."""
     def sort_key(a: dict):
@@ -887,7 +716,7 @@ def _fallback_comment(a: dict) -> str:
 
 
 def _fallback(articles: list[dict], categories: dict[int, str]) -> dict:
-    logger.warning("⚠️ 임팩트 평가 fallback (규칙 기반 이슈 선별)")
+    """규칙 기반 이슈 선별. LLM 실패 시 결과로 쓰이고, 성공 시에도 _fill_missing의 보충 후보로 쓰인다."""
     company = _dedup_articles(_sort_articles_for_report(articles, categories, "company"), 10)
     industry = _dedup_articles(_sort_articles_for_report(articles, categories, "industry"), 10)
 
@@ -967,113 +796,82 @@ def _fill_missing(result: dict, articles: list[dict], categories: dict[int, str]
 # ──────────────────────────────────────────────────────────────
 #  Public API
 # ──────────────────────────────────────────────────────────────
+_ITEM_COMMENT = {
+    "type": "object", "additionalProperties": False,
+    "properties": {"article_id": {"type": "integer"}, "comment": {"type": "string"}},
+    "required": ["article_id", "comment"],
+}
+_ITEM_SCORE = {
+    "type": "object", "additionalProperties": False,
+    "properties": {"article_id": {"type": "integer"}, "score": {"type": "integer"}},
+    "required": ["article_id", "score"],
+}
+IMPACT_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "properties": {
+        "top5_commentary":     {"type": "array", "items": _ITEM_COMMENT},
+        "company_group_top10": {"type": "array", "items": _ITEM_SCORE},
+        "industry_top10":      {"type": "array", "items": _ITEM_SCORE},
+    },
+    "required": ["top5_commentary", "company_group_top10", "industry_top10"],
+}
+
+
 def evaluate(articles: list[dict], categories: dict[int, str], settings: dict) -> dict:
     """LLM 호출로 임팩트 평가. 실패 시 규칙 기반 fallback."""
     if not articles:
         return {"top5_commentary": [], "company_group_top10": [], "industry_top10": []}
 
-    # Stage 1: 많을 때만 압축하되, 이슈 다양성 보존
-    if len(articles) > 200:
-        logger.info(f"[Stage1] 전체 {len(articles)}건 → 필터링 시작")
-        scores = _stage1_filter(articles, categories)
-        articles = _select_top_by_track(articles, scores, per_track=120)
-        logger.info(f"[Stage1] 필터 결과 {len(articles)}건 → Stage2 진행")
+    # Stage 1: 후보가 많으면 규칙 점수로 트랙별 상위만 (이슈 다양성 보존).
+    # 한 트랙이 몫(STAGE2_MAX/2)을 못 채우면 남는 자리는 점수 순으로 나머지 기사에 배분.
+    all_articles = articles
+    if len(articles) > STAGE2_MAX:
+        scores = {int(a["id"]): _prescore(a)[0] for a in articles if "id" in a}
+        selected = _select_top_by_track(articles, scores, per_track=STAGE2_MAX // 2)
+        if len(selected) < STAGE2_MAX:
+            chosen = {a.get("id") for a in selected}
+            rest = sorted((a for a in articles if a.get("id") not in chosen and "id" in a),
+                          key=lambda a: scores.get(int(a["id"]), 0), reverse=True)
+            selected += rest[:STAGE2_MAX - len(selected)]
+        articles = selected
+        logger.info(f"[Stage1] 규칙 점수로 후보 {len(articles)}건 선별 → Stage2 진행")
 
     valid_ids = {int(a["id"]) for a in articles if "id" in a}
-    system_prompt = settings.get("daily_report_impact_prompt", DEFAULT_IMPACT_PROMPT)
+    # 설정값이 빈 문자열이면 모듈 DEFAULT 사용 (예전엔 ""가 그대로 들어가 지시문이 비었음)
+    system_prompt = settings.get("daily_report_impact_prompt") or DEFAULT_IMPACT_PROMPT
     prompt = _build_prompt(articles, categories, system_prompt)
 
-    client = get_client()
-    if client is None:
-        logger.warning("Gemini 미사용 — 임팩트 평가 fallback")
-        return _fallback(articles, categories)
+    logger.info(f"📊 임팩트 평가 시작: {len(articles)}건, model={settings.get('llm_model')}")
 
-    model = settings.get("gpt_model_tone", DEFAULT_MODEL)
-
-    response_schema = {
-        "type": "OBJECT",
-        "properties": {
-            "top5_commentary": {
-                "type": "OBJECT",
-                "properties": {
-                    f"rank_{i}": {
-                        "type": "OBJECT",
-                        "properties": {
-                            "article_id": {"type": "INTEGER"},
-                            "comment": {"type": "STRING"},
-                        },
-                        "required": ["article_id", "comment"],
-                    } for i in range(1, 6)
-                },
-                "required": ["rank_1"],
-            },
-            "company_group_top10": {
-                "type": "ARRAY",
-                "items": {
-                    "type": "OBJECT",
-                    "properties": {
-                        "article_id": {"type": "INTEGER"},
-                        "score": {"type": "INTEGER"},
-                    },
-                    "required": ["article_id", "score"],
-                },
-            },
-            "industry_top10": {
-                "type": "ARRAY",
-                "items": {
-                    "type": "OBJECT",
-                    "properties": {
-                        "article_id": {"type": "INTEGER"},
-                        "score": {"type": "INTEGER"},
-                    },
-                    "required": ["article_id", "score"],
-                },
-            },
-        },
-        "required": ["top5_commentary", "company_group_top10", "industry_top10"],
-    }
-
-    config_kwargs = {
-        "max_output_tokens": MAX_OUTPUT_TOKEN,
-        "temperature": 0.15,
-        "response_mime_type": "application/json",
-        "response_schema": response_schema,
-    }
-    if hasattr(types, "ThinkingConfig"):
-        config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
-
-    logger.info(f"📊 임팩트 평가 시작: {len(articles)}건, model={model}")
-
-    last_err = None
+    res = None
     for attempt in range(1, RETRY_MAX + 1):
-        try:
-            resp = client.models.generate_content(
-                model=model,
-                contents=prompt,
-                config=types.GenerateContentConfig(**config_kwargs),
-            )
-            text = resp.text or ""
-            payload = _extract_json(text)
-            if not payload:
-                logger.error(f"❌ 임팩트 평가 JSON 파싱 실패: {text[:200]}")
-                return _fallback(articles, categories)
+        # 하루 2회·건당 1센트 미만이라 일일 예산 상한과 무관하게 실행 (상한 0 = LLM 끔은 지킴)
+        res = llm_client.generate_json(
+            prompt, IMPACT_SCHEMA, name="daily_impact", settings=settings,
+            max_output_tokens=MAX_OUTPUT_TOKEN, effort="low", timeout=LLM_TIMEOUT,
+            enforce_budget=False, service_tier=None if attempt == 1 else "default",
+        )
+        if res.ok or res.status in ("no_key", "auth", "config", "budget"):
+            break   # 성공, 또는 재시도해도 소용없는 설정 문제
+        if attempt < RETRY_MAX:
+            logger.warning(f"⏳ 임팩트 평가 [{attempt}/{RETRY_MAX}] {res.status}, "
+                           f"{RETRY_DELAY}s 후 Standard 티어로 재시도: {res.detail[:120]}")
+            time.sleep(RETRY_DELAY)
 
-            result = _validate(payload, valid_ids, articles=articles, categories=categories)
-            result = _fill_missing(result, articles, categories)
+    if not res or not res.ok:
+        logger.error(f"임팩트 평가 최종 실패({res.status if res else '-'}): "
+                     f"{res.detail[:200] if res else ''}")
+        logger.warning("⚠️ 임팩트 평가 fallback (규칙 기반 이슈 선별)")
+        return _fallback(all_articles, categories)
 
-            logger.info(
-                f"✅ 임팩트 평가 완료: 톱={len(result['top5_commentary'])}, "
-                f"당사·그룹={len(result['company_group_top10'])}, 업계동향={len(result['industry_top10'])}"
-            )
-            return result
-        except Exception as e:
-            last_err = e
-            if _is_transient(e) and attempt < RETRY_MAX:
-                logger.warning(f"⏳ 임팩트 평가 [{attempt}/{RETRY_MAX}] 일시 오류, {RETRY_DELAY}s 후 재시도: {e}")
-                time.sleep(RETRY_DELAY)
-                continue
-            logger.error(f"❌ 임팩트 평가 실패 (attempt={attempt}): {e}")
-            break
-
-    logger.error(f"임팩트 평가 최종 실패: {last_err}")
-    return _fallback(articles, categories)
+    try:
+        result = _validate(res.data, valid_ids, articles=articles, categories=categories)
+        result = _fill_missing(result, articles, categories)
+    except Exception as e:
+        logger.error(f"❌ 임팩트 평가 결과 검증 실패 → fallback: {e}", exc_info=True)
+        return _fallback(all_articles, categories)
+    logger.info(
+        f"✅ 임팩트 평가 완료: 톱={len(result['top5_commentary'])}, "
+        f"당사·그룹={len(result['company_group_top10'])}, 업계동향={len(result['industry_top10'])}"
+    )
+    return result

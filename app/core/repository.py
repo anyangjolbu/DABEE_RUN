@@ -19,6 +19,11 @@ logger = logging.getLogger(__name__)
 # ════════════════════════════════════════════════════════════
 #  Article
 # ════════════════════════════════════════════════════════════
+# STEP-COST-2: 재분석이 필요 없는 확정 '미분석'(대상 미등장·LLM 관련없음)은
+# reanalyze_attempts를 이 값으로 저장해 재분석 SELECT(< 3)에서 영구 제외한다.
+REANALYZE_FINAL = 99
+
+
 def article_exists(url: str) -> bool:
     if not url:
         return False
@@ -65,6 +70,7 @@ def article_save(article: dict, summary: str, tone: Optional[dict],
             tone.get("hostile_sentences", []),
             ensure_ascii=False,
         )
+        reanalyze_attempts  = REANALYZE_FINAL if tone.get("final") else 0
     else:
         tone_classification = None
         tone_reason         = None
@@ -73,6 +79,7 @@ def article_save(article: dict, summary: str, tone: Optional[dict],
         tone_hostile        = 0
         tone_total          = 0
         tone_sentences      = None
+        reanalyze_attempts  = 0
 
     sql = """
         INSERT INTO articles (
@@ -81,8 +88,8 @@ def article_save(article: dict, summary: str, tone: Optional[dict],
             theme_id, theme_label, tier, matched_kw,
             track, tone_classification, tone_reason, tone_confidence,
             tone_level, tone_hostile, tone_total, tone_sentences,
-            image_url, pub_date, collected_at
-        ) VALUES (?,?,?,?,?, ?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?)
+            image_url, pub_date, collected_at, reanalyze_attempts
+        ) VALUES (?,?,?,?,?, ?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?)
     """
     try:
         with get_conn() as conn:
@@ -92,7 +99,7 @@ def article_save(article: dict, summary: str, tone: Optional[dict],
                 theme_id, theme_label, tier, matched_kw,
                 track, tone_classification, tone_reason, tone_confidence,
                 tone_level, tone_hostile, tone_total, tone_sentences,
-                image_url, pub_date, collected_at,
+                image_url, pub_date, collected_at, reanalyze_attempts,
             ))
             return cur.lastrowid
     except Exception as e:
@@ -103,14 +110,60 @@ def article_save(article: dict, summary: str, tone: Optional[dict],
         return None
 
 
+# sent_status: 0=발송 전(또는 저장 후 중단), 1=1명 이상 성공, 2=전원 실패,
+#              3=매칭 수신자 없음 (STEP-COST-2, 재발송 대상에서 제외)
+SENT_NO_RECIPIENTS = 3
+
+
 def article_mark_sent(article_id: int, success: bool) -> None:
+    article_set_sent_status(article_id, 1 if success else 2)
+
+
+def article_set_sent_status(article_id: int, status: int) -> None:
     sent_at = datetime.now(config.KST).isoformat()
-    status  = 1 if success else 2
     with get_conn() as conn:
         conn.execute(
             "UPDATE articles SET sent_at = ?, sent_status = ? WHERE id = ?",
             (sent_at, status, article_id),
         )
+
+
+def article_last_collected_at() -> Optional[str]:
+    """가장 최근 저장 기사의 collected_at (KST ISO). 없으면 None."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT MAX(collected_at) AS m FROM articles").fetchone()
+    return row["m"] if row and row["m"] else None
+
+
+def articles_pending_send(since_iso: str, until_iso: str, limit: int = 50,
+                          max_fails: int = 5) -> list[dict]:
+    """재발송 후보.
+
+    - sent_status=0: 저장 후 발송 단계가 끝나지 않은 기사
+    - 활성 수신자 중 실패 기록만 있고(성공 없음) 실패가 max_fails 미만인 (기사, 수신자) 쌍이 있는 기사
+    이미 복구됐거나 포기한 쌍은 제외해, 처리할 게 없는 기사가 LIMIT 자리를 차지하지 않게 한다.
+    """
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT * FROM articles a
+            WHERE a.collected_at >= ? AND a.collected_at < ?
+              AND (a.sent_status = 0
+                   OR EXISTS (
+                       SELECT 1 FROM send_log f
+                       JOIN recipients rc ON rc.id = f.recipient_id AND rc.enabled = 1
+                       WHERE f.article_id = a.id AND f.success = 0
+                         AND NOT EXISTS (SELECT 1 FROM send_log s
+                                         WHERE s.article_id = f.article_id
+                                           AND s.recipient_id = f.recipient_id
+                                           AND s.success = 1)
+                         AND (SELECT COUNT(*) FROM send_log c
+                              WHERE c.article_id = f.article_id
+                                AND c.recipient_id = f.recipient_id
+                                AND c.success = 0) < ?))
+            ORDER BY a.id ASC
+            LIMIT ?
+        """, (since_iso, until_iso, max_fails, limit)).fetchall()
+    return [dict(r) for r in rows]
 
 
 def article_recent(limit: int = 50, offset: int = 0) -> list[dict]:
@@ -380,6 +433,23 @@ def session_cleanup() -> None:
 # ════════════════════════════════════════════════════════════
 #  SendLog
 # ════════════════════════════════════════════════════════════
+def sendlog_status(article_id: int) -> tuple[set, dict]:
+    """(성공한 recipient_id 집합, recipient_id별 실패 횟수)."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT recipient_id, success FROM send_log WHERE article_id = ?",
+            (article_id,),
+        ).fetchall()
+    ok: set = set()
+    fails: dict = {}
+    for r in rows:
+        if r["success"]:
+            ok.add(r["recipient_id"])
+        else:
+            fails[r["recipient_id"]] = fails.get(r["recipient_id"], 0) + 1
+    return ok, fails
+
+
 def sendlog_record(article_id: int, recipient_id: int,
                    success: bool, error_msg: str = "") -> None:
     sent_at = datetime.now(config.KST).isoformat()

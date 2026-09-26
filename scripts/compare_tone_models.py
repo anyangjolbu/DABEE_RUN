@@ -1,4 +1,4 @@
-﻿"""
+"""
 일회성 비교 스크립트: tone_analyzer를 lite vs flash 두 모델로 각각 호출해
 결과 차이 비교. 실행:
     python -m scripts.compare_tone_models
@@ -17,7 +17,7 @@ from app.services.tone_analyzer import analyze_tone
 
 
 N = 10
-MODELS = ["gemini-flash-lite-latest", "gemini-flash-latest"]
+MODELS = ["gpt-6-luna", "gpt-5.6-luna"]
 
 
 def fetch_recent_monitor(n: int) -> list[dict]:
@@ -37,7 +37,7 @@ def fetch_recent_monitor(n: int) -> list[dict]:
 
 def run_one(article_row: dict, model: str, base_settings: dict) -> dict:
     s = copy.deepcopy(base_settings)
-    s["gpt_model_tone"] = model
+    s["llm_model"] = model
 
     url = article_row["original_url"] or article_row["url"]
     body, _ = fetch_body_full(url)

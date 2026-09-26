@@ -22,7 +22,9 @@ load_dotenv(ROOT_DIR / ".env")
 # ── 외부 API 키 ──────────────────────────────────────────────────────
 NAVER_CLIENT_ID     = os.getenv("NAVER_CLIENT_ID", "")
 NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET", "")
-GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")
+# STEP-COST-2: Gemini → OpenAI 전환. 표준 이름(OPENAI_API_KEY)과
+# 기존 .env에 쓰던 이름(OPEN_AI_API_KEY) 둘 다 인식.
+OPENAI_API_KEY      = (os.getenv("OPENAI_API_KEY") or os.getenv("OPEN_AI_API_KEY") or "").strip()
 TELEGRAM_BOT_TOKEN  = os.getenv("TELEGRAM_BOT_TOKEN", "")
 
 
@@ -71,8 +73,8 @@ def validate() -> list[str]:
     warnings = []
     if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
         warnings.append("NAVER_CLIENT_ID/SECRET 미설정 — 뉴스 수집 불가")
-    if not GEMINI_API_KEY:
-        warnings.append("GEMINI_API_KEY 미설정 — 요약·톤분석 불가")
+    if not OPENAI_API_KEY:
+        warnings.append("OPENAI_API_KEY 미설정 — 톤분석·리포트 코멘트 불가 (수집·발송은 정상)")
     if not TELEGRAM_BOT_TOKEN:
         warnings.append("TELEGRAM_BOT_TOKEN 미설정 — 메시지 발송 불가")
     if not ADMIN_PASSWORD:

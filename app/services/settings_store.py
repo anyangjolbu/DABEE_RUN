@@ -25,14 +25,16 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "article_expire_hours":      24,
 
     # 네이버 API
-    "naver_display_count": 30,
+    "naver_display_count": 100,   # 네이버 최대. 1페이지를 넘으면 naver_api가 다음 페이지 수집
     "naver_sort":          "date",
 
-    # Gemini 모델 (STEP-3B-34: 요약은 lite, 톤분석은 flash로 차등 유지)
-    "gpt_model_summary": "gemini-flash-lite-latest",
-    "gpt_model_tone":    "gemini-flash-lite-latest",
+    # LLM (STEP-COST-2: 톤분석·일간리포트만 사용. OpenAI Flex 티어)
+    # 구 gpt_model_summary / gpt_model_tone 키는 더 이상 읽지 않음.
+    "llm_model":            "gpt-6-luna",
+    "llm_service_tier":     "flex",
+    "llm_daily_budget_usd": None,   # 일일 상한(USD). null=무제한, 양수=도달 시 톤분류만 보류, 0=LLM 끔
 
-    # 시스템 프롬프트 (요약용 톤)
+    # 시스템 프롬프트 (요약용 톤) — STEP-COST-2 이후 미사용 (요약 = description)
     "summary_system_prompt": (
         "당신은 SK하이닉스 PR팀에 보고할 뉴스 요약 작성자입니다. "
         "사실 위주로 3~5문장, 핵심 숫자·인물·이슈를 포함해 작성하세요. "

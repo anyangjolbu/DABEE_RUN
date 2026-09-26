@@ -108,6 +108,17 @@ SCHEMA = [
         UNIQUE(report_date, slot)
     )
     """,
+
+    # ─── LLM 일일 사용량 (STEP-COST-2: 일일 비용 상한용) ───────────
+    """
+    CREATE TABLE IF NOT EXISTS llm_usage (
+        day            TEXT PRIMARY KEY,
+        calls          INTEGER NOT NULL DEFAULT 0,
+        input_tokens   INTEGER NOT NULL DEFAULT 0,
+        output_tokens  INTEGER NOT NULL DEFAULT 0,
+        cost_usd       REAL    NOT NULL DEFAULT 0
+    )
+    """,
 ]
 
 

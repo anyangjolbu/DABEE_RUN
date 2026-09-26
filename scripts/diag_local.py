@@ -1,4 +1,4 @@
-﻿"""로컬 환경 진단: env, settings, DB 상태 한 번에."""
+"""로컬 환경 진단: env, settings, DB 상태 한 번에."""
 import os, sys, json, sqlite3
 from pathlib import Path
 
@@ -11,7 +11,7 @@ except ImportError:
     print("⚠️ python-dotenv 미설치 → .env 수동 로드 필요")
 
 print("\n── 환경변수 ──")
-keys = ["NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET", "GEMINI_API_KEY", "TELEGRAM_BOT_TOKEN", "ADMIN_PASSWORD"]
+keys = ["NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET", "OPENAI_API_KEY", "TELEGRAM_BOT_TOKEN", "ADMIN_PASSWORD"]
 for k in keys:
     v = os.environ.get(k, "")
     mark = "✅" if v else "❌"
@@ -25,7 +25,7 @@ if sp.exists():
     for tid, cfg in s.get("search_themes", {}).items():
         kw = cfg.get("keywords", [])
         print(f"    - {tid} (track={cfg.get('track','?')}, kw={len(kw)}개): {kw[:3]}{'...' if len(kw)>3 else ''}")
-    print(f"  gpt_model_tone: {s.get('gpt_model_tone')}")
+    print(f"  llm_model: {s.get('llm_model')} / tier: {s.get('llm_service_tier')}")
     print(f"  naver_display_count: {s.get('naver_display_count')}")
     print(f"  collection_lookback_days: {s.get('collection_lookback_days', '미설정 (기본 무제한)')}")
 else:

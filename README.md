@@ -5,7 +5,7 @@ SK하이닉스 PR팀을 위한 반도체·IT 뉴스 실시간 모니터링 시�
 ## 무엇을 하는 도구인가
 
 네이버 뉴스 API로 SK하이닉스·삼성전자·메모리·AI 반도체·빅테크·경쟁사 관련 기사를
-10분 주기로 수집해, Gemini로 요약·비우호 톤 분석을 거쳐 텔레그램으로 즉시 발송하고
+10분 주기로 수집해, OpenAI gpt-6-luna(Flex)로 비우호 톤 분석을 거쳐 텔레그램으로 즉시 발송하고
 웹 대시보드에 정리합니다. 매일 아침 7시에는 전날 주요 보도를 한 번에 묶어 일간 리포트로 발송합니다.
 
 | 채널 | 설명 |
@@ -46,7 +46,7 @@ uvicorn app.main:app --reload
 | 항목 | 발급처 |
 |---|---|
 | 네이버 뉴스 API 키 | [developers.naver.com](https://developers.naver.com/apps/#/list) |
-| Gemini API 키 | [aistudio.google.com](https://aistudio.google.com/app/apikey) |
+| OpenAI API 키 | [platform.openai.com](https://platform.openai.com/api-keys) |
 | 텔레그램 봇 토큰 | 텔레그램 `@BotFather` |
 
 ### 2. Railway 프로젝트 생성
@@ -68,7 +68,7 @@ Railway 대시보드 → 서비스 → **Variables** 탭에서 아래 항목 입
 ```
 NAVER_CLIENT_ID=...
 NAVER_CLIENT_SECRET=...
-GEMINI_API_KEY=...
+OPENAI_API_KEY=...
 TELEGRAM_BOT_TOKEN=...
 ADMIN_PASSWORD=...          # 충분히 복잡하게
 SECRET_KEY=...              # python -c "import secrets; print(secrets.token_urlsafe(48))"
@@ -96,7 +96,7 @@ https://<your-domain>.railway.app/api/health
 |---|---|---|
 | `NAVER_CLIENT_ID` | ✅ | 네이버 뉴스 API 클라이언트 ID |
 | `NAVER_CLIENT_SECRET` | ✅ | 네이버 뉴스 API 시크릿 |
-| `GEMINI_API_KEY` | ✅ | Google Gemini API 키 |
+| `OPENAI_API_KEY` | ✅ | OpenAI API 키 (`OPEN_AI_API_KEY`도 인식). 없으면 톤분석·리포트 코멘트만 멈추고 수집·발송은 정상 |
 | `TELEGRAM_BOT_TOKEN` | ✅ | 텔레그램 봇 토큰 |
 | `ADMIN_PASSWORD` | ✅ | 관리자 페이지 비밀번호 |
 | `SECRET_KEY` | ✅ (운영) | 세션 쿠키 서명 키 (미설정 시 재시작마다 초기화) |
@@ -136,7 +136,7 @@ app/
 │   ├── naver_api.py     # 네이버 뉴스 수집
 │   ├── relevance.py     # 관련성 필터
 │   ├── crawler.py       # 본문 크롤링
-│   ├── summarizer.py    # Gemini 요약
+│   ├── summarizer.py    # 요약 = 네이버 description (LLM 없음)
 │   ├── tone_analyzer.py # 비우호 톤 분석
 │   ├── telegram_sender.py # 텔레그램 발송
 │   ├── report_builder.py  # 일간 리포트

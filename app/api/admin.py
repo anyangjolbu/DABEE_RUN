@@ -17,6 +17,7 @@
     POST /api/admin/scheduler/trigger  : 파이프라인 즉시 실행
     POST /api/admin/scheduler/start    : 스케줄러 시작
     POST /api/admin/scheduler/stop     : 스케줄러 정지
+    GET  /api/admin/llm-usage          : LLM 일자별 사용량·비용 (STEP-COST-2)
 """
 
 import os
@@ -376,19 +377,24 @@ async def get_logs(
 async def reanalyze(request: Request, _: AdminDep):
     """
     미분석/LLM에러 monitor 레코드 일괄 재분석.
-    body: {"limit": 50}  (기본 50, 최대 200)
+    body: {"limit": 50, "max_age_hours": 72}
+      limit 기본 50·최대 200, max_age_hours 기본 72·최대 720 (장애 복구용으로 늘릴 수 있음)
+    응답의 "stopped"에 중단 사유(예산·시간 한도·LLM 장애)가 담긴다.
     """
     try:
         body = await request.json()
     except Exception:
         body = {}
-    limit = int(body.get("limit", 50))
-    limit = max(1, min(200, limit))
+    try:
+        limit = max(1, min(200, int(body.get("limit", 50))))
+        max_age = max(1.0, min(720.0, float(body.get("max_age_hours", 72))))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="limit/max_age_hours는 숫자여야 합니다")
 
     from app.services.reanalyze import reanalyze_unanalyzed
     import asyncio
-    # 동기 함수를 워커 스레드에서 실행 → 이벤트 루프 블로킹 방지
-    result = await asyncio.to_thread(reanalyze_unanalyzed, limit)
+    # 동기 함수를 워커 스레드에서 실행 → 이벤트 루프 블로킹 방지. 수동 실행은 시간 한도 10분
+    result = await asyncio.to_thread(reanalyze_unanalyzed, limit, max_age, 600)
     return result
 
 # ──────────────────────────────────────────────────────────
@@ -450,21 +456,20 @@ async def inspect_settings_file(_: AdminDep):
 
     return info
 
-@router.post("/api/admin/model-switch")
-async def model_switch(request: Request):
-    """settings.json의 모델 키를 lite-latest로 강제 갱신."""
-    import json
-    from app import config
-    path = str(config.SETTINGS_PATH)
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    data["gpt_model_tone"] = "gemini-flash-lite-latest"
-    data["gpt_model_summary"] = "gemini-flash-lite-latest"
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+# ── LLM 사용량 (STEP-COST-2) ─────────────────────────────────
+# 구 POST /api/admin/api/admin/model-switch(인증 없이 settings.json을 Gemini
+# 모델로 덮어쓰던 임시 엔드포인트)는 제거.
+
+@router.get("/llm-usage")
+async def llm_usage(_: AdminDep, days: int = Query(14, ge=1, le=90)):
+    """최근 N일 LLM 호출 수·토큰·추정 비용(USD) + 현재 모델·티어·일일 상한."""
+    from app.services import llm_client
+    s = load_settings()
+    rows = llm_client.usage_recent(days)
     return {
-        "ok": True,
-        "path": path,
-        "gpt_model_tone": data["gpt_model_tone"],
-        "gpt_model_summary": data["gpt_model_summary"],
+        "model":            s.get("llm_model"),
+        "service_tier":     s.get("llm_service_tier"),
+        "daily_budget_usd": llm_client.daily_budget(s),
+        "total_cost_usd":   round(sum(r["cost_usd"] for r in rows), 4),
+        "days":             rows,
     }

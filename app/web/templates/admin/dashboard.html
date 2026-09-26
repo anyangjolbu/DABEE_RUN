@@ -495,8 +495,8 @@
     const out = document.getElementById('reanalyzeResult');
     btn.disabled = true;
     const original = btn.textContent;
-    btn.textContent = '⏳ 재분석 중... (최대 1~2분)';
-    out.textContent = '서버에서 Gemini 호출 중입니다. 잠시만 기다려주세요.';
+    btn.textContent = '⏳ 재분석 중... (최대 10분)';
+    out.textContent = '서버에서 LLM(GPT) 호출 중입니다. 잠시만 기다려주세요.';
     try {
       const res = await adminFetch('/api/admin/reanalyze', {
         method: 'POST',
@@ -510,7 +510,8 @@
         `  · 양호: ${d['양호'] ?? 0}건\n` +
         `  · 비우호: ${d['비우호'] ?? 0}건\n` +
         `  · 미분석: ${d['미분석'] ?? 0}건\n` +
-        `  · 에러: ${d['에러'] ?? 0}건`;
+        `  · 에러: ${d['에러'] ?? 0}건` +
+        (d.stopped ? `\n  · 중단: ${d.stopped}` : '');
       toast(`재분석 완료: 양호 ${d['양호']??0} / 비우호 ${d['비우호']??0}`);
       loadDbStats();
     } catch (e) {
