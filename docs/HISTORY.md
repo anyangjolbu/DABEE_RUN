@@ -4,6 +4,28 @@
 
 ---
 
+## 2026-09-27 — STEP-PERF-1: 대시보드 탭 전환 지연 개선
+- **무엇을**:
+  - `models.POST_INDEXES`에 식 인덱스 3개 추가 (`COALESCE(pub_date, collected_at) DESC, id DESC`를 단독, `track` 조합, `track`+`tone_classification` 조합으로).
+  - 기사 목록 정렬에 `id DESC` 추가해 동점 순서를 고정.
+  - `sentiment._sentiment_for_date`를 `substr(...) = d`에서 같은 의미의 범위 조건으로 변경.
+  - `public.py`의 기사·PR Index·언론사 API를 `async def`에서 `def`로 변경(스레드풀 실행).
+  - `dashboard.js` 수정:
+    - 요청 순번으로 마지막 탭만 반영.
+    - 탭별 첫 페이지 캐시와 첫 화면 이후 나머지 탭 미리 불러오기(캐시가 있으면 즉시 표시, 뒤에서 갱신).
+    - 90초 확인은 전체 기사 수끼리 비교.
+    - 로딩 중 흐림 표시.
+- **왜**: 탭 전환이 느리다는 피드백. 운영 측정은 전체 탭 4.5초(캐시가 식은 상태), 필터 탭 0.5~1초. 원인은 네 가지였다.
+  - ① `ORDER BY COALESCE(...)`에 맞는 인덱스가 없어 탭마다 조건에 맞는 전 행(운영 27만 건)을 읽고 정렬했다(`USE TEMP B-TREE`).
+  - ② `load()`의 `pending` 가드가 조회 중 탭 클릭을 무시했다.
+  - ③ 90초 확인이 전체 기사 수를 현재 탭 기사 수와 비교해, 필터 탭에서는 90초마다 목록을 초기화했다.
+  - ④ 동기 DB 조회를 `async` 엔드포인트에서 실행해 다른 요청까지 막았다.
+- **검증**:
+  - 27만 건 복제 DB에서 탭 1페이지 조회가 87~466ms → 6~16ms, PR Index가 1,471ms → 9ms.
+  - 정렬 순서와 총수는 변경 전과 동일하고, 1~5페이지 간 중복 없음. 실행 계획에 임시 B-tree 없음.
+  - Node 가짜 DOM 시뮬레이션 9/9 통과. 옛 코드로는 클릭 무시와 90초 재로딩(3/3)이 재현됨.
+  - 인덱스 생성은 27만 건 기준 약 2초(운영 볼륨은 더 걸릴 수 있음)이고, 1회만 실행된다.
+
 ## 2026-09-27 — STEP-COST-2: LLM 비용 절감 (Gemini → OpenAI gpt-6-luna Flex)
 - **무엇을**: LLM 호출을 톤분류·일간리포트 두 곳으로 축소하고 OpenAI `gpt-6-luna` Flex 티어로 전환. 신규 `app/services/llm_client.py`(Responses API + json_schema strict, `llm_usage` 테이블로 KST 일자별 비용 누적, 선택적 일일 상한 `llm_daily_budget_usd` — 기본 null=무제한, 양수=상한, 0=LLM 끔). `relevance.py` Gemini 배치 분류 폐기(규칙 미결정 기사는 통과). `summarizer.py` LLM 폐기 → description 사용. `tone_analyzer.py` 프롬프트 최소화, 비우호일 때만 근거·인용 1문장 출력, 대상(하이닉스·솔리다임·곽노정·최태원) 미등장 시 LLM 없이 확정 '미분석'. `report_impact.py` Stage1 LLM → 규칙 점수(`_prescore`)로 트랙별 상위 80건, Stage2만 LLM 1회. `reanalyze.py`: 확정 미분석은 `reanalyze_attempts=99`로 영구 제외, Flex 429·상한 도달은 횟수 유지하고 다음 사이클 재시도, 최근 72시간·(상한 설정 시) 상한의 50% 이내로 제한. `pipeline.py`: 기사 단위 예외 격리, 사이클당 톤분류 LLM 시간 한도 480초(초과분은 미분석 저장·발송 후 재분석). `GET /api/admin/llm-usage` 추가. 인증 없이 settings를 덮어쓰던 `model-switch` 엔드포인트, `gemini_client.py`, `google-genai` 의존성 제거.
 - **왜**: 하루 수천 건 수집에서 Gemini 과금이 하루 약 $5. 목표는 월 $10 이하이며, 기사를 놓치지 않는 것이 요약 품질보다 우선. 실측으로 확인한 비용 원인은 네 가지: ① 관련성 필터가 DB 중복 제거보다 먼저 돌아 같은 기사를 10분마다 재분류(두 번째 사이클 후보 145건 중 신규 13건) ② `gemini-flash-latest` 별칭이 더 비싼 모델(3.5→3.8 Flash)로 자동 교체 ③ 요약·톤분류가 같은 본문으로 2회 호출 ④ '관련없음' 재분석 반복. 또한 `gemini-flash-lite-latest`(=3.5-flash-lite)가 `thinking_budget=0`을 400으로 거부해 일간 리포트가 매번 규칙 fallback으로 나가던 버그 발견.

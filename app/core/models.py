@@ -142,6 +142,13 @@ ALTER_MIGRATIONS = [
 POST_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_articles_track_date     ON articles(track, collected_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_articles_classification ON articles(tone_classification, collected_at DESC)",
+    # STEP-PERF-1: 대시보드 탭(전체/비우호/양호/경쟁사 참고)과 PR Index가 쓰는
+    # ORDER BY / WHERE COALESCE(pub_date, collected_at) 를 인덱스로 처리.
+    # 없으면 탭 전환마다 조건에 맞는 전 행(수십만 건)을 읽어 정렬했다 (27만 건 기준 0.4~0.5초, 캐시가 식으면 수 초).
+    # id DESC는 발행 시각 동점(분 단위라 흔함) 정렬을 고정해 '더보기' 페이지 간 중복·누락을 막는다.
+    "CREATE INDEX IF NOT EXISTS idx_articles_sort           ON articles(COALESCE(pub_date, collected_at) DESC, id DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_articles_track_sort     ON articles(track, COALESCE(pub_date, collected_at) DESC, id DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_articles_track_cls_sort ON articles(track, tone_classification, COALESCE(pub_date, collected_at) DESC, id DESC)",
 ]
 
 

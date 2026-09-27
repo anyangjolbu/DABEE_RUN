@@ -2,7 +2,12 @@
 // STEP 4A-2 (옵션 A): tone_classification 기반 배지/필터 + reason 노출
 (function () {
   const LIMIT = 50;
-  let offset = 0, total = 0, pending = false;
+  let offset = 0, total = 0;
+  // STEP-PERF-1: 탭 전환 지연 개선
+  //  - reqSeq: 마지막 요청만 반영 (예전 pending 가드는 조회 중 탭 클릭을 무시했음)
+  //  - tabCache: 탭(+검색어)별 첫 화면 캐시 → 탭 전환 즉시 표시 후 뒤에서 갱신
+  let reqSeq = 0, loadingMore = false, globalTotal = 0;
+  const tabCache = {};
   let currentTab = 'all';
   let allArticles = [];
   let currentSearch = '';
@@ -113,20 +118,47 @@ function esc(s) {
       document.querySelectorAll('.section-tabs .tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       currentTab = tab.dataset.tab;
-      load(true);   // 서버에서 새로 로드
+      const c = tabCache[cacheKey()];
+      if (c) {   // 캐시가 있으면 즉시 표시, 서버 갱신은 뒤에서
+        allArticles = c.items.slice(); total = c.total; offset = c.offset;
+        renderCards();
+      }
+      load(true);
     });
   });
 
   // 탭 → API 쿼리 파라미터 변환 (검색어 포함)
-  function tabToQuery(tab) {
+  function tabToQuery(tab, search = currentSearch) {
     let q = '';
     if (tab === 'hostile')        q = '&classification=비우호&track=monitor';
     else if (tab === 'normal')    q = '&classification=양호&track=monitor';
     else if (tab === 'reference') q = '&track=reference';
-    if (currentSearch) {
-      q += '&search=' + encodeURIComponent(currentSearch);
+    if (search) {
+      q += '&search=' + encodeURIComponent(search);
     }
     return q;
+  }
+
+  function cacheKey(tab = currentTab, search = currentSearch) { return tab + '|' + search; }
+  function clearTabCache() { Object.keys(tabCache).forEach(k => delete tabCache[k]); }
+
+  function setLoading(on) {
+    const grid = document.getElementById('cardsGrid');
+    if (!grid) return;
+    grid.style.transition = 'opacity .15s';
+    grid.style.opacity = on ? '0.45' : '';
+  }
+
+  // 첫 화면 뒤 나머지 탭 첫 페이지를 미리 받아 둠 → 첫 전환도 즉시
+  function prefetchTabs() {
+    ['all', 'hostile', 'normal', 'reference'].forEach(t => {
+      const key = cacheKey(t, '');
+      if (tabCache[key]) return;
+      fetch(`/api/articles?limit=${LIMIT}&offset=0${tabToQuery(t, '')}`)
+        .then(r => r.json())
+        .then(d => { if (!tabCache[key]) tabCache[key] = { items: d.items, total: d.total, offset: d.items.length }; })
+        .catch(() => {});
+    });
   }
 
   function filterByTab(items) {
@@ -151,27 +183,45 @@ function esc(s) {
 
   // ── Load articles ────────────────────────────────────────
   async function load(reset = false) {
-    if (pending) return;
-    pending = true;
-    if (reset) { offset = 0; allArticles = []; }
+    if (!reset && loadingMore) return;          // '더보기' 중복 클릭만 막음
+    const my  = ++reqSeq;
+    const key = cacheKey();
+    const cached = tabCache[key];
+    if (reset) setLoading(!cached);             // 캐시로 이미 그렸으면 흐리게 하지 않음
+    else loadingMore = true;
     try {
-      const qs = tabToQuery(currentTab); const res = await fetch(`/api/articles?limit=${LIMIT}&offset=${offset}${qs}`);
+      const from = reset ? 0 : offset;
+      const res  = await fetch(`/api/articles?limit=${LIMIT}&offset=${from}${tabToQuery(currentTab)}`);
       const data = await res.json();
-      total   = data.total;
-      offset += data.items.length;
-      allArticles = allArticles.concat(data.items);
+      if (my !== reqSeq) return;                // 그 사이 탭·검색이 바뀜 → 이 응답은 버림
+      if (reset) {
+        const unchanged = cached && cached.total === data.total &&
+          data.items.every((a, i) => cached.items[i] && cached.items[i].id === a.id);
+        if (unchanged && allArticles.length) return;   // 화면(더보기 포함) 그대로 유지
+        allArticles = data.items;
+        offset = data.items.length;
+      } else {
+        allArticles = allArticles.concat(data.items);
+        offset += data.items.length;
+      }
+      total = data.total;
+      tabCache[key] = { items: allArticles.slice(), total, offset };
       renderCards();
-      /* sentiment 별도 API로 */
     } catch(e) { console.error('[dashboard] 로드 실패', e); }
-    finally { pending = false; }
+    finally {
+      if (!reset) loadingMore = false;
+      if (my === reqSeq) setLoading(false);
+    }
   }
 
-  // 90초마다 서버 total 확인 — WS 이벤트 누락 대비
+  // 90초마다 전체 기사 수 확인 — WS 이벤트 누락 대비.
+  // (예전엔 '전체' 수를 현재 탭의 수와 비교해, 필터 탭에서는 90초마다 목록이 초기화됐음)
   setInterval(async () => {
     try {
       const res  = await fetch('/api/articles?limit=1&offset=0');
       const data = await res.json();
-      if (total > 0 && data.total > total) load(true);
+      if (globalTotal && data.total > globalTotal) { clearTabCache(); load(true); }
+      globalTotal = data.total;
     } catch {}
   }, 90_000);
 
@@ -470,6 +520,7 @@ setInterval(loadSentiment, 90_000);
 // ── WebSocket events ─────────────────────────────────────
   window.addEventListener('dabee:pipeline', (e) => {
     if (e.detail.phase === 'done' && (e.detail.result?.new ?? 0) > 0) {
+      clearTabCache();
       load(true); // 신규 기사 자동 반영
     }
   });
@@ -505,7 +556,7 @@ setInterval(loadSentiment, 90_000);
   }
 
   // ── Init ─────────────────────────────────────────────────
-  load(true);
+  load(true).then(prefetchTabs);
 })();
 
 

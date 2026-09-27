@@ -169,7 +169,7 @@ def articles_pending_send(since_iso: str, until_iso: str, limit: int = 50,
 def article_recent(limit: int = 50, offset: int = 0) -> list[dict]:
     sql = """
         SELECT * FROM articles
-        ORDER BY COALESCE(pub_date, collected_at) DESC
+        ORDER BY COALESCE(pub_date, collected_at) DESC, id DESC
         LIMIT ? OFFSET ?
     """
     with get_conn() as conn:
@@ -218,7 +218,8 @@ def article_filter(
         params.extend([like, like])
 
     w = ("WHERE " + " AND ".join(where)) if where else ""
-    order = "ORDER BY COALESCE(pub_date, collected_at) DESC"
+    # STEP-PERF-1: idx_articles_*sort 인덱스와 같은 순서. id DESC로 동점 순서 고정 (페이지 간 중복·누락 방지)
+    order = "ORDER BY COALESCE(pub_date, collected_at) DESC, id DESC"
 
     with get_conn() as conn:
         total = conn.execute(f"SELECT COUNT(*) FROM articles {w}", params).fetchone()[0]

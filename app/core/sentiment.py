@@ -32,19 +32,25 @@ def sentiment_today() -> dict:
 
 
 def _sentiment_for_date(d: str) -> dict:
-    """특정 날짜(YYYY-MM-DD)의 NSS 계산."""
-    de = _date_expr()
-    sql = f"""
+    """특정 날짜(YYYY-MM-DD)의 NSS 계산.
+
+    STEP-PERF-1: `substr(...) = d` 대신 같은 의미의 범위 조건(d ≤ 값 < 다음날)을 써서
+    idx_articles_track_sort 인덱스로 그날 행만 읽는다 (ISO 문자열이라 사전순 = 시간순).
+    """
+    next_d = (datetime.strptime(d, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+    sql = """
         SELECT 
             SUM(CASE WHEN tone_classification='양호'   THEN 1 ELSE 0 END) AS good,
             SUM(CASE WHEN tone_classification='비우호' THEN 1 ELSE 0 END) AS bad,
             SUM(CASE WHEN tone_classification IS NULL OR tone_classification='미분석' THEN 1 ELSE 0 END) AS unknown,
             COUNT(*) AS total
         FROM articles
-        WHERE track='monitor' AND {de} = ?
+        WHERE track='monitor'
+          AND COALESCE(pub_date, collected_at) >= ?
+          AND COALESCE(pub_date, collected_at) <  ?
     """
     with get_conn() as conn:
-        row = conn.execute(sql, (d,)).fetchone()
+        row = conn.execute(sql, (d, next_d)).fetchone()
     
     good    = int(row["good"]    or 0)
     bad     = int(row["bad"]     or 0)

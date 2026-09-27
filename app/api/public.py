@@ -33,8 +33,9 @@ async def health():
         )
 
 
+# STEP-PERF-1: 동기 DB 조회 API는 def로 → FastAPI 스레드풀 실행 (이벤트 루프·다른 요청을 막지 않게)
 @router.get("/articles")
-async def list_articles(
+def list_articles(
     limit:          int           = Query(50, ge=1, le=200),
     offset:         int           = Query(0,  ge=0),
     tier:           Optional[int] = Query(None),
@@ -94,7 +95,7 @@ async def get_report(date: str):
 
 
 @router.get("/dashboard/sentiment")
-async def dashboard_sentiment(days: int = Query(7, ge=1, le=30)):
+def dashboard_sentiment(days: int = Query(7, ge=1, le=30)):
     return JSONResponse({
         "today": sentiment.sentiment_today(),
         "trend": sentiment.sentiment_trend(days=days),
@@ -148,7 +149,7 @@ def _date_to_bucket_key(d_str: str, conf) -> str:
 
 
 @router.get("/press/stats")
-async def press_stats(
+def press_stats(
     range_: str = Query("4w", alias="range", regex="^(7d|4w|3m)$"),
     min_n:  Optional[int] = Query(None, ge=1, le=200),
 ):
@@ -244,7 +245,7 @@ async def press_stats(
 
 
 @router.get("/press/trend")
-async def press_trend(
+def press_trend(
     press:  str = Query(..., min_length=1, max_length=100),
     range_: str = Query("4w", alias="range", regex="^(7d|4w|3m)$"),
 ):
